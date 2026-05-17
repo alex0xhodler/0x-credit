@@ -77,6 +77,44 @@ function formatDisplayAmount(amount: string): string {
   })
 }
 
+function parseLeverageMultiplier(leverageLabel: string): number | undefined {
+  const leverageMatch = leverageLabel.match(/(\d+(?:\.\d+)?)x/)
+  if (!leverageMatch) return undefined
+  return Number(leverageMatch[1])
+}
+
+function formatCompactTokenAmount(value: number, symbol: string): string {
+  if (!Number.isFinite(value) || value <= 0) return `0 ${symbol}`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M ${symbol}`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K ${symbol}`
+  return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${symbol}`
+}
+
+function chainTone(chainName: string): string {
+  return chainName.toLowerCase().includes('ethereum') ? 'ethereum' : 'monad'
+}
+
+function TokenIcon({ symbol }: { symbol: string }) {
+  if (symbol.toUpperCase().includes('ETH')) {
+    return (
+      <svg aria-hidden="true" className="token-icon eth" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="15" />
+        <path d="M16 4.8 8.4 16.3 16 20.8l7.6-4.5L16 4.8Z" />
+        <path d="M8.4 17.8 16 27.2l7.6-9.4-7.6 4.5-7.6-4.5Z" />
+        <path d="m16 12.6-7.6 3.7 7.6 4.5 7.6-4.5-7.6-3.7Z" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg aria-hidden="true" className="token-icon usdc" viewBox="0 0 32 32">
+      <circle cx="16" cy="16" r="15" />
+      <path d="M9.8 9.4a9.6 9.6 0 0 0 0 13.2M22.2 9.4a9.6 9.6 0 0 1 0 13.2" />
+      <text x="16" y="20.3">$</text>
+    </svg>
+  )
+}
+
 function useSimulatedPositionValue(amount: string, apyLabel: string, active: boolean): number {
   const baseAmount = useMemo(() => {
     const parsed = Number(amount)
@@ -126,6 +164,12 @@ export function TransactionCockpit({
   const canExecute = isConnected && isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
   const canStart = isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
   const annualYield = estimateAnnualYield(amount, opportunity.apyLabel, opportunity.tokenSymbol)
+  const parsedAmount = Number(amount)
+  const displayAmount = Number.isFinite(parsedAmount) ? parsedAmount.toLocaleString() : amount
+  const leverageMultiplier = parseLeverageMultiplier(opportunity.leverageLabel)
+  const borrowedEstimate = leverageMultiplier && Number.isFinite(parsedAmount)
+    ? Math.max(parsedAmount * (leverageMultiplier - 1), 0)
+    : undefined
   const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen)
   const actionLabel = hasStartedFlow && isConnected
     ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('up to ', '')}`
@@ -133,37 +177,68 @@ export function TransactionCockpit({
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
   const shellRef = useRef<HTMLElement>(null)
   const amountFieldRef = useRef<HTMLLabelElement>(null)
+  const actionButton = isConnected ? (
+    <button
+      className="primary-action"
+      disabled={hasStartedFlow ? !canExecute : !canStart}
+      type="button"
+      onClick={onExecute}
+    >
+      {actionLabel}
+    </button>
+  ) : (
+    <button
+      className="primary-action"
+      disabled={!canStart}
+      type="button"
+      onClick={onConnect}
+    >
+      Start earning
+    </button>
+  )
 
   useEffect(() => {
     if (!hasStartedFlow || positionOpen) return
-    if (globalThis.matchMedia?.('(min-width: 900px)').matches) {
-      shellRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      return
-    }
+    if (globalThis.matchMedia?.('(min-width: 900px)').matches) return
     amountFieldRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hasStartedFlow, positionOpen])
 
   return (
     <main className={`shell ${positionOpen ? 'is-invested' : showExecution ? 'is-expanded' : 'is-landing'}`} ref={shellRef}>
-      {!positionOpen && <section className="opportunity-panel" aria-label="0x.credit opportunities">
+      {!positionOpen && <section className={`opportunity-panel ${showExecution ? 'route-context' : ''}`} aria-label="0x.credit opportunities">
         <div className="brand-row">
           <span className="brand-mark" aria-hidden="true">0x</span>
           <span>0x.credit</span>
         </div>
 
-        <div className="headline-grid">
-          <h1 className="hero-line">Earn amplified yield effortlessly</h1>
-          <p>Pick an opportunity, input the amount, and open your earn account.</p>
-        </div>
+        {showExecution ? (
+          <div className="route-masthead" aria-label="Selected route">
+            <div className="route-crumbs">
+              <span>Opportunities</span>
+              <span aria-hidden="true">/</span>
+              <strong>{opportunity.tokenSymbol} on {opportunity.chainName}</strong>
+            </div>
+            <span>Pool</span>
+            <strong>{opportunity.strategyName}</strong>
+            <p>{opportunity.apyLabel} · {opportunity.leverageLabel}</p>
+          </div>
+        ) : (
+          <div className="headline-grid">
+            <h1 className="hero-line">Earn amplified yield effortlessly</h1>
+            <p>Pick an opportunity, input the amount, and open your earn account.</p>
+          </div>
+        )}
 
         <div className="opportunity-list" aria-label="Opportunities">
           {opportunities.map(item => {
             const selected = item.id === opportunity.id
+            const tone = chainTone(item.chainName)
+            if (showExecution && !selected) return null
 
             return (
               <article
                 aria-label={`${item.tokenSymbol} on ${item.chainName} opportunity`}
-                className={`opportunity-card ${selected ? 'selected' : ''}`}
+                className={`opportunity-card ${tone} ${selected ? 'selected' : ''}`}
                 key={item.id}
               >
                 <button
@@ -173,13 +248,23 @@ export function TransactionCockpit({
                   type="button"
                   onClick={() => onSelectOpportunity?.(item)}
                 >
-                  <span>{item.tokenSymbol} on {item.chainName}</span>
-                  <strong>{item.apyLabel}</strong>
-                  <small>{item.minDepositLabel || 'Best available route for this amount.'}</small>
+                  <span className={`opportunity-title ${tone}`}>
+                    <TokenIcon symbol={item.tokenSymbol} />
+                    <span className="asset-copy">
+                      <strong>{item.tokenSymbol}</strong>
+                      <small>{item.chainName}</small>
+                    </span>
+                  </span>
+                  <span className="apy-pill">{item.apyLabel}</span>
                 </button>
 
-                <div className="route-details">
-                  <button type="button">Show details</button>
+                <div className={`route-details ${showExecution ? 'inline-details' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => onSelectOpportunity?.(item)}
+                  >
+                    Show details
+                  </button>
                   <div className="facts-row" aria-label="Route facts">
                     <span>Pool: {item.strategyName}</span>
                     <span>Strategy: {item.strategyId}</span>
@@ -188,10 +273,38 @@ export function TransactionCockpit({
                     {item.minDepositLabel && <span>{item.minDepositLabel}</span>}
                   </div>
                 </div>
+
               </article>
             )
           })}
         </div>
+
+        {showExecution && (
+          <div className="route-context-note">
+            <span>Route details</span>
+            <div className="context-facts" aria-label="Selected route details">
+              <span>Pool: {opportunity.strategyName}</span>
+              <span>Strategy: {opportunity.strategyId}</span>
+              <span>{opportunity.leverageLabel}</span>
+              <span>{opportunity.protectionLabel}</span>
+              {opportunity.minDepositLabel && <span>{opportunity.minDepositLabel}</span>}
+            </div>
+          </div>
+        )}
+
+        {showExecution && (
+          <section className="position-explained" aria-label="Your position explained">
+            <h3>Your position explained</h3>
+            <ol>
+              <li>You deposit <strong>{displayAmount} {opportunity.tokenSymbol}</strong> as collateral.</li>
+              {borrowedEstimate !== undefined && (
+                <li>Gearbox lends about <strong>{formatCompactTokenAmount(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the route.</li>
+              )}
+              <li><strong>{opportunity.protectionLabel}</strong> is included where available.</li>
+              <li>APY and health factor can move after opening.</li>
+            </ol>
+          </section>
+        )}
       </section>}
 
       {showExecution && <section className="execution-panel" aria-label="0x.credit route">
@@ -200,7 +313,15 @@ export function TransactionCockpit({
         )}
 
         {!positionOpen && hasStartedFlow && (
-          <div className="action-grid">
+          <header className="flow-heading">
+            <span>Selected route</span>
+            <h2>Open {opportunity.tokenSymbol} earn account</h2>
+            <p>Approve once, then open the account. The approved amount is supplied inside the account opening action.</p>
+          </header>
+        )}
+
+        {!positionOpen && hasStartedFlow && (
+          <div className="route-topline">
             <label className="amount-field" ref={amountFieldRef}>
               <span>Deposit amount</span>
               <input
@@ -213,37 +334,13 @@ export function TransactionCockpit({
               />
             </label>
 
-            {isConnected ? (
-              <button
-                className="primary-action"
-                disabled={hasStartedFlow ? !canExecute : !canStart}
-                type="button"
-                onClick={onExecute}
-              >
-                {actionLabel}
-              </button>
-            ) : (
-              <button
-                className="primary-action"
-                disabled={!canStart}
-                type="button"
-                onClick={onConnect}
-              >
-                Start earning
-              </button>
-            )}
-            {!hasStartedFlow && !routeWarning && (
-              <p className="start-note">Best available route for this amount.</p>
+            {annualYield && (
+              <section className="journey-summary" aria-label="Earning summary">
+                <span>Est. yield</span>
+                <strong>{annualYield}</strong>
+              </section>
             )}
           </div>
-        )}
-
-        {!positionOpen && hasStartedFlow && annualYield && (
-          <section className="journey-summary" aria-label="Earning summary">
-            <span>Target</span>
-            <strong>Earn {opportunity.apyLabel.replace('up to ', '')} on {opportunity.tokenSymbol}</strong>
-            <p>Est. {annualYield} on {Number(amount).toLocaleString()} {opportunity.tokenSymbol}.</p>
-          </section>
         )}
 
         {routeWarning && <p className="alert">{routeWarning}</p>}
@@ -301,6 +398,12 @@ export function TransactionCockpit({
               )
             })}
           </ol>
+        )}
+
+        {!positionOpen && hasStartedFlow && (
+          <div className="flow-footer">
+            {actionButton}
+          </div>
         )}
       </section>}
     </main>
