@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd poc && npm install",
+  "installCommand": "corepack enable && cd sdk && pnpm install --frozen-lockfile --ignore-scripts && pnpm build && cd ../poc && npm install --include=dev --ignore-scripts",
   "buildCommand": "cd poc && npm run build",
   "outputDirectory": "poc/dist"
 }
