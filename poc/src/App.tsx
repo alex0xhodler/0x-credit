@@ -119,7 +119,7 @@ createAppKit({
   enableReconnect: false,
   themeMode: 'light',
   themeVariables: {
-    '--w3m-accent': '#111111',
+    '--w3m-accent': '#ff6b35',
   },
   features: {
     analytics: false,
