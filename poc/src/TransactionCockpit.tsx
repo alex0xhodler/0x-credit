@@ -187,7 +187,7 @@ export function TransactionCockpit({
     : undefined
   const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen, activePositionStats)
   const actionLabel = hasStartedFlow && isConnected
-    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
+    ? isBusy ? 'Opening Smart account...' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
     : 'Start earning'
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
   const displayError = error ? formatTransactionError(error) : undefined
