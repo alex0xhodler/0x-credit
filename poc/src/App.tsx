@@ -21,7 +21,7 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { TransactionCockpit, type OpportunityView } from './TransactionCockpit'
+import { TransactionCockpit, type OpportunityView, type ActivePositionStats } from './TransactionCockpit'
 import {
   config,
   isReownProjectConfigured,
@@ -195,10 +195,10 @@ function GearboxApp() {
   const [steps, setSteps] = useState<ExecutionStep[]>([])
   const [approvalTarget, setApprovalTarget] = useState<Address>()
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
+  const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
-  const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   const selectedOpportunityIsExecutable = selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID
 
@@ -292,10 +292,12 @@ function GearboxApp() {
       })
       .then(accounts => {
         if (cancelled) return
-        const stillOpen = (accounts as CreditAccountSnapshotLike[]).some(account =>
+        const activeAccount = (accounts as CreditAccountSnapshotLike[]).find(account =>
           creditAccountHasFunds(account, selectedRoute.address),
         )
+        const stillOpen = Boolean(activeAccount)
         setHasOpenPosition(stillOpen)
+        setActiveCreditAccount(activeAccount)
         if (stillOpen) {
           storeOpenPosition({
             address,
@@ -498,6 +500,17 @@ function GearboxApp() {
     selectedOpportunityIsExecutable,
   ])
 
+  const activePositionStats = useMemo<ActivePositionStats | undefined>(() => {
+    if (!activeCreditAccount || !opportunity) return undefined
+    
+    const divisor = 10 ** (opportunity.collateralDecimals || 6)
+    const totalValue = Number(activeCreditAccount.totalValue ?? 0n) / divisor
+    const debt = Number(activeCreditAccount.debt ?? 0n) / divisor
+    const netValue = totalValue - debt
+
+    return { totalValue, debt, netValue }
+  }, [activeCreditAccount, opportunity])
+
   const monadOpportunityView = baseOpportunityView(opportunity, selectedRoute)
   const displayedOpportunity = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID
     ? MAINNET_WETH_OPPORTUNITY
@@ -511,6 +524,7 @@ function GearboxApp() {
     <TransactionCockpit
       amount={amount}
       accountStatus={isConnected ? 'connected' : 'disconnected'}
+      activePositionStats={selectedOpportunityIsExecutable ? activePositionStats : undefined}
       error={executionError || loadError}
       hasStartedFlow={hasStartedFlow}
       isBusy={isExecuting}

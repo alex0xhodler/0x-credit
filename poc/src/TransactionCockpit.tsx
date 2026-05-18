@@ -16,6 +16,12 @@ export interface OpportunityView {
   disabledReason?: string
 }
 
+export interface ActivePositionStats {
+  totalValue: number
+  debt: number
+  netValue: number
+}
+
 export interface TransactionCockpitProps {
   amount: string
   accountStatus: 'connected' | 'disconnected'
@@ -35,6 +41,7 @@ export interface TransactionCockpitProps {
   onResetFlow?(): void
   hasStoredPosition?: boolean
   onViewPosition?(): void
+  activePositionStats?: ActivePositionStats
 }
 
 const POWERED_BY_PARTNERS = [
@@ -118,11 +125,12 @@ function TokenIcon({ symbol }: { symbol: string }) {
   )
 }
 
-function useSimulatedPositionValue(amount: string, apyLabel: string, active: boolean): number {
+function useSimulatedPositionValue(amount: string, apyLabel: string, active: boolean, activeStats?: ActivePositionStats): number {
   const baseAmount = useMemo(() => {
+    if (activeStats) return activeStats.netValue
     const parsed = Number(amount)
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-  }, [amount])
+  }, [amount, activeStats])
   const apyPercent = useMemo(() => parseApyPercent(apyLabel) ?? 0, [apyLabel])
   const [elapsedMs, setElapsedMs] = useState(0)
 
@@ -163,20 +171,21 @@ export function TransactionCockpit({
   onResetFlow,
   hasStoredPosition,
   onViewPosition,
+  activePositionStats,
 }: TransactionCockpitProps) {
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
   const canUseOpportunity = opportunity.isExecutable !== false
   const canExecute = isConnected && isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
   const canStart = isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
-  const annualYield = estimateAnnualYield(amount, opportunity.apyLabel, opportunity.tokenSymbol)
+  const annualYield = estimateAnnualYield(activePositionStats ? String(activePositionStats.netValue) : amount, opportunity.apyLabel, opportunity.tokenSymbol)
   const parsedAmount = Number(amount)
   const displayAmount = Number.isFinite(parsedAmount) ? parsedAmount.toLocaleString() : amount
   const leverageMultiplier = parseLeverageMultiplier(opportunity.leverageLabel)
   const borrowedEstimate = leverageMultiplier && Number.isFinite(parsedAmount)
     ? Math.max(parsedAmount * (leverageMultiplier - 1), 0)
     : undefined
-  const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen)
+  const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen, activePositionStats)
   const actionLabel = hasStartedFlow && isConnected
     ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
     : 'Start earning'
@@ -373,8 +382,29 @@ export function TransactionCockpit({
               <strong>Position live</strong>
             </div>
             <h2>Smart account earning</h2>
-            <span className="value-label">Smart account value</span>
-            <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
+            
+            {activePositionStats ? (
+              <div className="stats-grid">
+                <div className="stat-item">
+                  <span className="value-label">Total Value</span>
+                  <strong>{formatPositionValue(activePositionStats.totalValue, opportunity.tokenSymbol)}</strong>
+                </div>
+                <div className="stat-item">
+                  <span className="value-label">Debt</span>
+                  <strong>{formatPositionValue(activePositionStats.debt, opportunity.tokenSymbol)}</strong>
+                </div>
+                <div className="stat-item">
+                  <span className="value-label">Net Value</span>
+                  <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
+                </div>
+              </div>
+            ) : (
+              <>
+                <span className="value-label">Smart account value</span>
+                <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
+              </>
+            )}
+
             <div className="live-stats" aria-label="Position summary">
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}

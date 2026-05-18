@@ -891,6 +891,26 @@ button {
   line-height: 1;
 }
 
+.stats-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat-item strong {
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(32px, 6vw, 48px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
 .live-stats {
   display: flex;
   flex-direction: column;
