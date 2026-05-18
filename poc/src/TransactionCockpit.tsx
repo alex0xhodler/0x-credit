@@ -32,6 +32,9 @@ export interface TransactionCockpitProps {
   onConnect(): void
   onExecute(): void
   onSelectOpportunity?(opportunity: OpportunityView): void
+  onResetFlow?(): void
+  hasStoredPosition?: boolean
+  onViewPosition?(): void
 }
 
 const POWERED_BY_PARTNERS = [
@@ -72,7 +75,7 @@ function parseApyPercent(apyLabel: string): number | undefined {
 }
 
 function formatPositionValue(value: number, symbol: string): string {
-  return `${value.toLocaleString(undefined, {
+  return `${value.toLocaleString('en-US', {
     maximumFractionDigits: 4,
     minimumFractionDigits: 4,
   })} ${symbol}`
@@ -106,21 +109,12 @@ function chainTone(chainName: string): string {
 function TokenIcon({ symbol }: { symbol: string }) {
   if (symbol.toUpperCase().includes('ETH')) {
     return (
-      <svg aria-hidden="true" className="token-icon eth" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r="15" />
-        <path d="M16 4.8 8.4 16.3 16 20.8l7.6-4.5L16 4.8Z" />
-        <path d="M8.4 17.8 16 27.2l7.6-9.4-7.6 4.5-7.6-4.5Z" />
-        <path d="m16 12.6-7.6 3.7 7.6 4.5 7.6-4.5-7.6-3.7Z" />
-      </svg>
+      <img aria-hidden="true" className="token-icon eth" src="https://cryptoicon.io/wp-content/uploads/cc-assets/SVG/Dark/ETH.svg" alt="" />
     )
   }
 
   return (
-    <svg aria-hidden="true" className="token-icon usdc" viewBox="0 0 32 32">
-      <circle cx="16" cy="16" r="15" />
-      <path d="M9.8 9.4a9.6 9.6 0 0 0 0 13.2M22.2 9.4a9.6 9.6 0 0 1 0 13.2" />
-      <text x="16" y="20.3">$</text>
-    </svg>
+    <img aria-hidden="true" className="token-icon usdc" src="https://cryptoicon.io/wp-content/uploads/cc-assets/SVG/Color/USDC.svg" alt="" />
   )
 }
 
@@ -166,6 +160,9 @@ export function TransactionCockpit({
   onConnect,
   onExecute,
   onSelectOpportunity,
+  onResetFlow,
+  hasStoredPosition,
+  onViewPosition,
 }: TransactionCockpitProps) {
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
@@ -181,7 +178,7 @@ export function TransactionCockpit({
     : undefined
   const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen)
   const actionLabel = hasStartedFlow && isConnected
-    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('up to ', '')}`
+    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
     : 'Start earning'
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
   const displayError = error ? formatTransactionError(error) : undefined
@@ -224,18 +221,27 @@ export function TransactionCockpit({
         {showExecution ? (
           <div className="route-masthead" aria-label="Selected route">
             <div className="route-crumbs">
-              <span>Opportunities</span>
+              {onResetFlow ? (
+                <button type="button" className="breadcrumb-btn" onClick={onResetFlow}>Opportunities</button>
+              ) : (
+                <span>Opportunities</span>
+              )}
               <span aria-hidden="true">/</span>
               <strong>{opportunity.tokenSymbol} on {opportunity.chainName}</strong>
             </div>
-            <span>Pool</span>
+            <span>Strategy</span>
             <strong>{opportunity.strategyName}</strong>
-            <p>{opportunity.apyLabel} · {opportunity.leverageLabel}</p>
+            <p>{opportunity.apyLabel}</p>
           </div>
         ) : (
           <div className="headline-grid">
-            <h1 className="hero-line">Earn amplified yield effortlessly</h1>
-            <p>Pick an opportunity, input the amount, and open your earn account.</p>
+            <h1 className="hero-line">Earn amplified yields on auto-pilot</h1>
+            <p>Pick a Strategy, open your Smart account, start earning Effortlessly</p>
+            {hasStoredPosition && !positionOpen && onViewPosition && (
+              <button type="button" className="view-position-link" onClick={onViewPosition}>
+                View your active Smart account →
+              </button>
+            )}
           </div>
         )}
 
@@ -246,18 +252,15 @@ export function TransactionCockpit({
             if (showExecution && !selected) return null
 
             return (
-              <article
+              <button
                 aria-label={`${item.tokenSymbol} on ${item.chainName} opportunity`}
                 className={`opportunity-card ${tone} ${selected ? 'selected' : ''}`}
                 key={item.id}
+                disabled={positionOpen}
+                type="button"
+                onClick={() => onSelectOpportunity?.(item)}
               >
-                <button
-                  aria-label={`${item.tokenSymbol} on ${item.chainName} ${item.apyLabel}`}
-                  className="opportunity-card-main"
-                  disabled={positionOpen}
-                  type="button"
-                  onClick={() => onSelectOpportunity?.(item)}
-                >
+                <div className="opportunity-card-main">
                   <span className={`opportunity-title ${tone}`}>
                     <TokenIcon symbol={item.tokenSymbol} />
                     <span className="asset-copy">
@@ -266,25 +269,20 @@ export function TransactionCockpit({
                     </span>
                   </span>
                   <span className="apy-pill">{item.apyLabel}</span>
-                </button>
+                </div>
 
                 <div className={`route-details ${showExecution ? 'inline-details' : ''}`}>
-                  <button
-                    type="button"
-                    onClick={() => onSelectOpportunity?.(item)}
-                  >
+                  <span className="show-details-pseudo-button">
                     Show details
-                  </button>
-                  <div className="facts-row" aria-label="Route facts">
-                    <span>Pool: {item.strategyName}</span>
-                    <span>Strategy: {item.strategyId}</span>
-                    <span>{item.leverageLabel}</span>
+                  </span>
+                  <div className="facts-row" aria-label="Strategy facts">
+                    <span>Strategy: {item.strategyName}</span>
                     <span>{item.protectionLabel}</span>
                     {item.minDepositLabel && <span>{item.minDepositLabel}</span>}
                   </div>
                 </div>
 
-              </article>
+              </button>
             )
           })}
         </div>
@@ -304,11 +302,9 @@ export function TransactionCockpit({
 
         {showExecution && (
           <div className="route-context-note">
-            <span>Route details</span>
-            <div className="context-facts" aria-label="Selected route details">
-              <span>Pool: {opportunity.strategyName}</span>
-              <span>Strategy: {opportunity.strategyId}</span>
-              <span>{opportunity.leverageLabel}</span>
+            <span>Strategy details</span>
+            <div className="context-facts" aria-label="Selected strategy details">
+              <span>Strategy: {opportunity.strategyName}</span>
               <span>{opportunity.protectionLabel}</span>
               {opportunity.minDepositLabel && <span>{opportunity.minDepositLabel}</span>}
             </div>
@@ -321,7 +317,7 @@ export function TransactionCockpit({
             <ol>
               <li>You deposit <strong>{displayAmount} {opportunity.tokenSymbol}</strong> as collateral.</li>
               {borrowedEstimate !== undefined && (
-                <li>Gearbox lends about <strong>{formatCompactTokenAmount(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the route.</li>
+                <li>Gearbox lends about <strong>{formatCompactTokenAmount(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
               )}
               <li><strong>{opportunity.protectionLabel}</strong> is included where available.</li>
               <li>APY and health factor can move after opening.</li>
@@ -337,9 +333,9 @@ export function TransactionCockpit({
 
         {!positionOpen && hasStartedFlow && (
           <header className="flow-heading">
-            <span>Selected route</span>
-            <h2>Open {opportunity.tokenSymbol} earn account</h2>
-            <p>Approve once, then open the account. The approved amount is supplied inside the account opening action.</p>
+            <span>Selected strategy</span>
+            <h2>Open {opportunity.tokenSymbol} Smart account</h2>
+            <p>Approve once, then open the Smart account. The approved amount is supplied inside the Smart account opening action.</p>
           </header>
         )}
 
@@ -376,17 +372,23 @@ export function TransactionCockpit({
               <span>0x.credit</span>
               <strong>Position live</strong>
             </div>
-            <h2>Account earning</h2>
-            <span className="value-label">Credit account value</span>
+            <h2>Smart account earning</h2>
+            <span className="value-label">Smart account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
             <div className="live-stats" aria-label="Position summary">
-              <span>Route APY <strong>{opportunity.apyLabel.replace('up to ', '')}</strong></span>
+              <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
-            <p>Simulated live from the current route.</p>
-            <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
-              Manage position
-            </a>
+            <div className="position-actions">
+              <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
+                Manage position
+              </a>
+              {onResetFlow && (
+                <button type="button" className="reset-flow-link" onClick={onResetFlow}>
+                  Create a new Smart account
+                </button>
+              )}
+            </div>
           </section>
         )}
 

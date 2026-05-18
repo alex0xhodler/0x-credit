@@ -63,9 +63,9 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   strategyName: 'WMoo Curve ETH+-WETH',
   tokenSymbol: 'WETH',
   chainName: 'Ethereum',
-  apyLabel: 'up to 14.08% APY',
+  apyLabel: 'Current APY 14.08%',
   leverageLabel: '7.60x target',
-  protectionLabel: 'Mainnet route',
+  protectionLabel: 'Mainnet strategy',
   minDepositLabel: 'Min deposit: 1.5 WETH',
   isExecutable: false,
   disabledReason: 'Ethereum execution is not wired in this PoC yet.',
@@ -169,7 +169,7 @@ function minimumDepositMessage(
   return `Enter at least ${formatTokenAmount(
     minimumDepositAmount,
     opportunity.collateralDecimals,
-  )} ${opportunity.collateralSymbol} to keep this route above 1.03 HF and the route minimum debt.`
+  )} ${opportunity.collateralSymbol} to keep this strategy above 1.03 HF and the strategy minimum debt.`
 }
 
 function GearboxApp() {
@@ -198,6 +198,7 @@ function GearboxApp() {
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
+  const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   const selectedOpportunityIsExecutable = selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID
 
@@ -224,7 +225,7 @@ function GearboxApp() {
     if (lowestMinimumDeposit !== undefined && amountRaw < lowestMinimumDeposit) {
       return minimumDepositMessage(opportunity, lowestMinimumDeposit)
     }
-    return 'This amount is outside the current debt limits for this route.'
+    return 'This amount is outside the current debt limits for this strategy.'
   }, [amountRaw, opportunity, selectedRoute])
 
   useEffect(() => {
@@ -516,7 +517,9 @@ function GearboxApp() {
       isProjectReady={isReownProjectConfigured}
       opportunity={displayedOpportunity}
       opportunities={opportunityViews}
-      manageUrl={hasOpenPosition && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      manageUrl={hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      hasStoredPosition={hasOpenPosition}
+      onViewPosition={() => setForceNewAccount(false)}
       routeWarning={displayedRouteWarning}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
@@ -536,6 +539,10 @@ function GearboxApp() {
         setHasStartedFlow(true)
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
         if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
+      }}
+      onResetFlow={() => {
+        setHasStartedFlow(false)
+        setForceNewAccount(true)
       }}
     />
   )

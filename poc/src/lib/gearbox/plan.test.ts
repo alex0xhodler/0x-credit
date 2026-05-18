@@ -35,7 +35,7 @@ describe('Gearbox planning helpers', () => {
   })
 
   it('formats live APY as an opportunity headline', () => {
-    expect(formatOpportunityApy(425_670)).toBe('up to 42.57% APY')
+    expect(formatOpportunityApy(425_670)).toBe('Current APY 42.57%')
     expect(formatOpportunityApy(undefined)).toBe('APY loading')
   })
 
@@ -81,10 +81,10 @@ describe('Gearbox planning helpers', () => {
 
     expect(steps.map(step => step.label)).toEqual([
       'Approve USDC',
-      'Open credit account',
+      'Open Smart account',
     ])
     expect(steps[0].walletPrompt).toBe('Confirm the token approval without leaving this page.')
-    expect(steps[1].walletPrompt).toBe('Confirm the account opening in your wallet.')
+    expect(steps[1].walletPrompt).toBe('Confirm the Smart account opening in your wallet.')
   })
 
   it('skips approval when allowance already covers the deposit amount', () => {
@@ -107,7 +107,7 @@ describe('Gearbox planning helpers', () => {
     })
 
     expect(steps[0].mode).toBe('batchable')
-    expect(steps[1].label).toBe('Open credit account')
+    expect(steps[1].label).toBe('Open Smart account')
   })
 
   it('updates step state without mutating the original list', () => {
