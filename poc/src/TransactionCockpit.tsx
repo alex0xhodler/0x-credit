@@ -222,12 +222,9 @@ export function TransactionCockpit({
   return (
     <main className={`shell ${positionOpen ? 'is-invested' : showExecution ? 'is-expanded' : 'is-landing'}`} ref={shellRef}>
       {!positionOpen && <section className={`opportunity-panel ${showExecution ? 'route-context' : ''}`} aria-label="0x.credit opportunities">
-        <div className="brand-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <span className="brand-mark" aria-hidden="true">0x</span>
-            <span>0x.credit</span>
-          </div>
-          <w3m-button size="sm" />
+        <div className="brand-row">
+          <span className="brand-mark" aria-hidden="true">0x</span>
+          <span>0x.credit</span>
         </div>
 
         {showExecution ? (

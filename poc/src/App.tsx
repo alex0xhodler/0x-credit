@@ -344,14 +344,16 @@ function GearboxApp() {
       return
     }
 
-    setSteps(
-      createExecutionSteps({
+    setSteps(current => {
+      // Don't overwrite if we already have active or error steps
+      if (current.some(s => s.status === 'active' || s.status === 'error')) return current
+      return createExecutionSteps({
         allowance: allowance.data ?? 0n,
         amount: amountRaw,
         canBatch,
         symbol: opportunity.collateralSymbol,
-      }),
-    )
+      })
+    })
   }, [allowance.data, amountRaw, canBatch, isExecuting, opportunity])
 
   const runSequentialApproval = useCallback(
@@ -375,9 +377,11 @@ function GearboxApp() {
   )
 
   const handleExecute = useCallback(async () => {
-    if (!selectedOpportunityIsExecutable || !opportunity || !address || !amountRaw || !selectedRoute) return
+    if (!selectedOpportunityIsExecutable || !opportunity || !address || !amountRaw || !selectedRoute) {
+      alert(`Debug early return:\nExecutable: ${selectedOpportunityIsExecutable}\nOpp: ${!!opportunity}\nAddress: ${address}\nAmount: ${amountRaw}\nRoute: ${!!selectedRoute}`)
+      return
+    }
     setHasStartedFlow(true)
-    setPendingStartAfterConnect(false)
     if (routeWarning) {
       setExecutionError(routeWarning)
       return
