@@ -760,6 +760,7 @@ button {
   background: #fff1f7;
   color: var(--ember);
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .journey-summary {
