@@ -141,6 +141,7 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
       timeout: 60_000,
     },
     {
+      gasLimit: null,
       plugins: {
         remoteConfigs,
         apy,

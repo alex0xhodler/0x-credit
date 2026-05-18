@@ -9,7 +9,16 @@ npm install
 npm run dev
 ```
 
-Set `VITE_REOWN_PROJECT_ID` in `.env.local` to use a specific Reown project.
+Copy `.env.example` to `.env.local` for local development.
+
+Required:
+
+- `VITE_REOWN_PROJECT_ID`: Reown project id for wallet connections.
+
+Optional:
+
+- `VITE_MONAD_RPC_URL`: Monad RPC used by the Gearbox SDK. Defaults to `https://rpc.monad.xyz`.
+- `VITE_GEARBOX_APY_URL`: APY snapshot URL. Defaults to `/gearbox-apy/latest.json`.
 
 ## Resources
 
