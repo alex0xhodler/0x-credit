@@ -277,7 +277,7 @@ button {
   gap: 0;
   width: 100%;
   min-height: 102px;
-  padding: 18px 18px 17px;
+  padding: 18px 180px 17px 18px;
   border: 1px solid var(--card-border);
   border-radius: var(--surface-radius);
   background: var(--paper-raised);
@@ -334,12 +334,9 @@ button {
 }
 
 .opportunity-card-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  gap: 14px;
+  display: block;
   width: 100%;
   padding: 0;
-  align-items: center;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -406,8 +403,8 @@ button {
 .asset-copy {
   display: flex;
   min-width: 0;
-  gap: 7px;
-  align-items: baseline;
+  gap: 8px;
+  align-items: center;
 }
 
 .asset-copy strong {
@@ -453,14 +450,16 @@ button {
 }
 
 .apy-pill {
-  align-self: center;
-  justify-self: end;
-  padding: 6px 10px;
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 12px;
   border: 1px solid rgba(255, 107, 53, 0.15);
   border-radius: var(--button-radius);
   background: rgba(255, 107, 53, 0.08);
   color: color-mix(in srgb, var(--acid) 80%, var(--ink));
-  font-size: clamp(0.9rem, 1.2vw, 1rem);
+  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
   font-weight: 850;
   line-height: 1;
   white-space: nowrap;
