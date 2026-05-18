@@ -65,7 +65,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   chainName: 'Ethereum',
   apyLabel: 'Current APY 14.08%',
   leverageLabel: '7.60x target',
-  protectionLabel: 'Mainnet route',
+  protectionLabel: 'Mainnet strategy',
   minDepositLabel: 'Min deposit: 1.5 WETH',
   isExecutable: false,
   disabledReason: 'Ethereum execution is not wired in this PoC yet.',
@@ -169,7 +169,7 @@ function minimumDepositMessage(
   return `Enter at least ${formatTokenAmount(
     minimumDepositAmount,
     opportunity.collateralDecimals,
-  )} ${opportunity.collateralSymbol} to keep this route above 1.03 HF and the route minimum debt.`
+  )} ${opportunity.collateralSymbol} to keep this strategy above 1.03 HF and the strategy minimum debt.`
 }
 
 function GearboxApp() {
@@ -224,7 +224,7 @@ function GearboxApp() {
     if (lowestMinimumDeposit !== undefined && amountRaw < lowestMinimumDeposit) {
       return minimumDepositMessage(opportunity, lowestMinimumDeposit)
     }
-    return 'This amount is outside the current debt limits for this route.'
+    return 'This amount is outside the current debt limits for this strategy.'
   }, [amountRaw, opportunity, selectedRoute])
 
   useEffect(() => {
@@ -537,6 +537,7 @@ function GearboxApp() {
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
         if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
       }}
+      onResetFlow={() => setHasStartedFlow(false)}
     />
   )
 }

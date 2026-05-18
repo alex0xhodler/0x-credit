@@ -23,7 +23,7 @@ const wethOpportunity = {
   chainName: 'Ethereum',
   apyLabel: 'Current APY 14.08%',
   leverageLabel: '7.60x target',
-  protectionLabel: 'Mainnet route',
+  protectionLabel: 'Mainnet strategy',
   minDepositLabel: 'Min deposit: 1.5 WETH',
   isExecutable: false,
   disabledReason: 'Ethereum execution is not wired in this PoC yet.',
@@ -67,12 +67,11 @@ describe('TransactionCockpit', () => {
     expect(screen.getByRole('button', { name: /weth on ethereum opportunity/i })).toBeInTheDocument()
     const opportunityCard = screen.getByLabelText('USDC on Monad opportunity')
     expect(within(opportunityCard).getByText('Show details')).toBeInTheDocument()
-    expect(within(opportunityCard).getByText('Pool: Curve AUSD/USDC/USDT0')).toBeInTheDocument()
+    expect(within(opportunityCard).getByText('Strategy: Curve AUSD/USDC/USDT0')).toBeInTheDocument()
     const wethCard = screen.getByLabelText('WETH on Ethereum opportunity')
     expect(within(wethCard).getByText('Ethereum')).toBeInTheDocument()
-    expect(within(wethCard).getByText('Pool: WMoo Curve ETH+-WETH')).toBeInTheDocument()
+    expect(within(wethCard).getByText('Strategy: WMoo Curve ETH+-WETH')).toBeInTheDocument()
     expect(within(wethCard).getByText('Min deposit: 1.5 WETH')).toBeInTheDocument()
-    expect(within(wethCard).getByText('7.60x target')).toBeInTheDocument()
     expect(screen.queryByText('Connect')).not.toBeInTheDocument()
     expect(screen.queryByText('Earn 42.57% APY on USDC')).not.toBeInTheDocument()
     expect(screen.queryByText('Target')).not.toBeInTheDocument()
@@ -88,7 +87,7 @@ describe('TransactionCockpit', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /usdc on monad opportunity/i }))
     expect(screen.getByLabelText('Deposit amount')).toHaveValue('1000')
-    expect(screen.getAllByText('Pool: Curve AUSD/USDC/USDT0').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Strategy: Curve AUSD/USDC/USDT0').length).toBeGreaterThan(0)
     expect(screen.queryByRole('region', { name: /powered by/i })).not.toBeInTheDocument()
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: /start earning/i }))
@@ -224,7 +223,7 @@ describe('TransactionCockpit', () => {
     expect(screen.getByText('Position live')).toBeInTheDocument()
     expect(screen.getByText('42.57%')).toBeInTheDocument()
     expect(screen.getByText('425.70 USDC / year')).toBeInTheDocument()
-    expect(screen.getByText('Simulated live from the current route.')).toBeInTheDocument()
+    expect(screen.getByText('Simulated live from the current strategy.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /manage position/i })).toHaveAttribute(
       'href',
       'https://app.gearbox.finance/dashboard',
@@ -282,7 +281,7 @@ describe('TransactionCockpit', () => {
         isProjectReady
         isBusy={false}
         opportunity={opportunity}
-        routeWarning="Enter at least 1,212.13 USDC for this route."
+        routeWarning="Enter at least 1,212.13 USDC for this strategy."
         steps={[]}
         onAmountChange={() => undefined}
         onConnect={() => undefined}
@@ -290,7 +289,7 @@ describe('TransactionCockpit', () => {
       />,
     )
 
-    expect(screen.getByText('Enter at least 1,212.13 USDC for this route.')).toBeInTheDocument()
+    expect(screen.getByText('Enter at least 1,212.13 USDC for this strategy.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /earn 42.57%/i })).toBeDisabled()
   })
 

@@ -32,6 +32,7 @@ export interface TransactionCockpitProps {
   onConnect(): void
   onExecute(): void
   onSelectOpportunity?(opportunity: OpportunityView): void
+  onResetFlow?(): void
 }
 
 const POWERED_BY_PARTNERS = [
@@ -157,6 +158,7 @@ export function TransactionCockpit({
   onConnect,
   onExecute,
   onSelectOpportunity,
+  onResetFlow,
 }: TransactionCockpitProps) {
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
@@ -215,13 +217,17 @@ export function TransactionCockpit({
         {showExecution ? (
           <div className="route-masthead" aria-label="Selected route">
             <div className="route-crumbs">
-              <span>Opportunities</span>
+              {onResetFlow ? (
+                <button type="button" className="breadcrumb-btn" onClick={onResetFlow}>Opportunities</button>
+              ) : (
+                <span>Opportunities</span>
+              )}
               <span aria-hidden="true">/</span>
               <strong>{opportunity.tokenSymbol} on {opportunity.chainName}</strong>
             </div>
-            <span>Pool</span>
+            <span>Strategy</span>
             <strong>{opportunity.strategyName}</strong>
-            <p>{opportunity.apyLabel} · {opportunity.leverageLabel}</p>
+            <p>{opportunity.apyLabel}</p>
           </div>
         ) : (
           <div className="headline-grid">
@@ -260,10 +266,8 @@ export function TransactionCockpit({
                   <span className="show-details-pseudo-button">
                     Show details
                   </span>
-                  <div className="facts-row" aria-label="Route facts">
-                    <span>Pool: {item.strategyName}</span>
-                    <span>Strategy: {item.strategyId}</span>
-                    <span>{item.leverageLabel}</span>
+                  <div className="facts-row" aria-label="Strategy facts">
+                    <span>Strategy: {item.strategyName}</span>
                     <span>{item.protectionLabel}</span>
                     {item.minDepositLabel && <span>{item.minDepositLabel}</span>}
                   </div>
@@ -289,11 +293,9 @@ export function TransactionCockpit({
 
         {showExecution && (
           <div className="route-context-note">
-            <span>Route details</span>
-            <div className="context-facts" aria-label="Selected route details">
-              <span>Pool: {opportunity.strategyName}</span>
-              <span>Strategy: {opportunity.strategyId}</span>
-              <span>{opportunity.leverageLabel}</span>
+            <span>Strategy details</span>
+            <div className="context-facts" aria-label="Selected strategy details">
+              <span>Strategy: {opportunity.strategyName}</span>
               <span>{opportunity.protectionLabel}</span>
               {opportunity.minDepositLabel && <span>{opportunity.minDepositLabel}</span>}
             </div>
@@ -306,7 +308,7 @@ export function TransactionCockpit({
             <ol>
               <li>You deposit <strong>{displayAmount} {opportunity.tokenSymbol}</strong> as collateral.</li>
               {borrowedEstimate !== undefined && (
-                <li>Gearbox lends about <strong>{formatCompactTokenAmount(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the route.</li>
+                <li>Gearbox lends about <strong>{formatCompactTokenAmount(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
               )}
               <li><strong>{opportunity.protectionLabel}</strong> is included where available.</li>
               <li>APY and health factor can move after opening.</li>
@@ -322,7 +324,7 @@ export function TransactionCockpit({
 
         {!positionOpen && hasStartedFlow && (
           <header className="flow-heading">
-            <span>Selected route</span>
+            <span>Selected strategy</span>
             <h2>Open {opportunity.tokenSymbol} earn account</h2>
             <p>Approve once, then open the account. The approved amount is supplied inside the account opening action.</p>
           </header>
@@ -365,10 +367,10 @@ export function TransactionCockpit({
             <span className="value-label">Credit account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
             <div className="live-stats" aria-label="Position summary">
-              <span>Route APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
+              <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
-            <p>Simulated live from the current route.</p>
+            <p>Simulated live from the current strategy.</p>
             <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
               Manage position
             </a>

@@ -16,9 +16,9 @@
   --ethereum: #2457ff;
   --card-border: rgba(255, 107, 53, 0.2);
   --card-shadow: 0 4px 12px rgba(255, 107, 53, 0.05);
-  --surface-radius: 24px;
-  --button-radius: 28px;
-  --small-radius: 12px;
+  --surface-radius: 8px;
+  --button-radius: 6px;
+  --small-radius: 4px;
 
   color: var(--ink);
   background: var(--canvas);
@@ -160,6 +160,23 @@ button {
   color: var(--muted);
   font-size: 0.86rem;
   font-weight: 850;
+}
+
+.breadcrumb-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.breadcrumb-btn:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
 }
 
 .route-crumbs strong {
