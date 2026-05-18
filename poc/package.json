@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource/league-gothic": "^5.2.8",
+    "@fontsource/manrope": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",
     "@gearbox-protocol/sdk": "^14.10.0",
     "@reown/appkit": "1.8.19",
