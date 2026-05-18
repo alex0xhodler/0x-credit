@@ -223,7 +223,6 @@ describe('TransactionCockpit', () => {
     expect(screen.getByText('Position live')).toBeInTheDocument()
     expect(screen.getByText('42.57%')).toBeInTheDocument()
     expect(screen.getByText('425.70 USDC / year')).toBeInTheDocument()
-    expect(screen.getByText('Simulated live from the current strategy.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /manage position/i })).toHaveAttribute(
       'href',
       'https://app.gearbox.finance/dashboard',

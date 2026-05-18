@@ -370,7 +370,6 @@ export function TransactionCockpit({
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
-            <p>Simulated live from the current strategy.</p>
             <div className="position-actions">
               <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
                 Manage position

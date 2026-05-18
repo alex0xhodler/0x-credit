@@ -164,8 +164,7 @@ button {
 .brand-row,
 .facts-row,
 .step-heading,
-.live-kicker,
-.live-stats {
+.live-kicker {
   display: flex;
   align-items: center;
 }
