@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ExecutionStep } from './lib/gearbox/plan'
+import { formatTransactionError } from './lib/gearbox/transactions'
 
 export interface OpportunityView {
   id: string
@@ -183,6 +184,7 @@ export function TransactionCockpit({
     ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('up to ', '')}`
     : 'Start earning'
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
+  const displayError = error ? formatTransactionError(error) : undefined
   const shellRef = useRef<HTMLElement>(null)
   const amountFieldRef = useRef<HTMLLabelElement>(null)
   const actionButton = isConnected ? (
@@ -366,7 +368,7 @@ export function TransactionCockpit({
 
         {routeWarning && <p className="alert">{routeWarning}</p>}
         {!routeWarning && opportunity.disabledReason && <p className="alert">{opportunity.disabledReason}</p>}
-        {error && <p className="alert">{error}</p>}
+        {displayError && <p className="alert">{displayError}</p>}
 
         {positionOpen && manageUrl && (
           <section className="position-live" aria-label="Open position">
@@ -392,6 +394,7 @@ export function TransactionCockpit({
           <ol className="step-list" aria-label="Execution steps">
             {steps.map(step => {
               const collapsedApproval = isCollapsedApproval(step)
+              const stepError = step.error ? formatTransactionError(step.error) : undefined
 
               return (
                 <li
@@ -413,7 +416,7 @@ export function TransactionCockpit({
                     )}
                     {!collapsedApproval && step.walletPrompt && <p className="wallet-prompt">{step.walletPrompt}</p>}
                     {!collapsedApproval && step.txHash && <p className="tx-hash">{step.txHash}</p>}
-                    {step.error && <p className="step-error">{step.error}</p>}
+                    {stepError && <p className="step-error">{stepError}</p>}
                   </div>
                 </li>
               )

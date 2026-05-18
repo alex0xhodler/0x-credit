@@ -50,7 +50,7 @@ import {
   type LoadedGearboxOpportunity,
 } from './lib/gearbox/live'
 import { prepareOpenStrategyTx } from './lib/gearbox/sdkAdapter'
-import { assertSuccessfulReceipt } from './lib/gearbox/transactions'
+import { assertSuccessfulReceipt, formatTransactionError } from './lib/gearbox/transactions'
 
 const queryClient = new QueryClient()
 const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
@@ -457,7 +457,7 @@ function GearboxApp() {
       })
       setHasOpenPosition(true)
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'The Gearbox route failed.'
+      const message = formatTransactionError(error)
       const failedStep = nextSteps.find(step => step.status === 'active')?.id || 'account'
       setSteps(markStepError(nextSteps, failedStep, message))
       setExecutionError(message)

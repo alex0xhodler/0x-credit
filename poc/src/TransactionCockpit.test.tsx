@@ -293,4 +293,46 @@ describe('TransactionCockpit', () => {
     expect(screen.getByText('Enter at least 1,212.13 USDC for this route.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /earn 42.57% apy/i })).toBeDisabled()
   })
+
+  it('shows cancelled wallet prompts without leaking raw request arguments into the layout', () => {
+    const rawWalletError = [
+      'User rejected the request.',
+      'Request Arguments:',
+      'from: 0x894003A817e5c1AAFaC95b710bd2b68f0c040095',
+      'Contract Call:',
+      'address: 0x000000000eFE302BEAA2b3e6e1b18d008D69a9012a',
+      'function: approve(address,uint256)',
+      'Version: viem@2.47.0',
+    ].join(' ')
+
+    render(
+      <TransactionCockpit
+        amount="100"
+        accountStatus="connected"
+        error={rawWalletError}
+        hasStartedFlow
+        isProjectReady
+        isBusy={false}
+        opportunity={opportunity}
+        steps={createExecutionSteps({
+          allowance: 0n,
+          amount: 100n,
+          canBatch: false,
+          symbol: 'USDC',
+        }).map(step => (
+          step.id === 'approve'
+            ? { ...step, status: 'error' as const, error: rawWalletError }
+            : step
+        ))}
+        onAmountChange={() => undefined}
+        onConnect={() => undefined}
+        onExecute={() => undefined}
+      />,
+    )
+
+    expect(screen.getAllByText('Transaction cancelled in your wallet. No funds moved.').length).toBeGreaterThan(0)
+    expect(screen.queryByText(rawWalletError)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Request Arguments/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/viem@2\.47\.0/i)).not.toBeInTheDocument()
+  })
 })
