@@ -93,6 +93,9 @@ export interface GearboxCreditManagerRoute {
   availableToBorrow: bigint
   baseBorrowRate: number
   baseQuotaRateWithFee: bigint
+  collateralToken: Address
+  collateralSymbol: string
+  collateralDecimals: number
 }
 
 let cachedOpportunity: Promise<LoadedGearboxOpportunity> | undefined
@@ -198,6 +201,10 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
     .filter((cm): cm is StrategyCreditManagerLike => Boolean(cm))
   const creditManagers = creditManagerOptions.map(cm => {
     const cmSuite = sdk.marketRegister.findCreditManager(cm.address)
+    const collateralToken = cmSuite.underlying as Address
+    const collateralMeta = sdk.tokensMeta.get(collateralToken)
+    const collateralSymbol = collateralMeta?.symbol || 'USDC'
+    const collateralDecimals = collateralMeta?.decimals || 6
     const marketMaxLeverage = info?.maxLeverage && info.maxLeverage > 0n
       ? info.maxLeverage
       : BigInt(resolvedStrategy.maxLeverage || 300)
@@ -230,6 +237,9 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
       availableToBorrow: cm.availableToBorrow,
       baseBorrowRate: cm.baseBorrowRate,
       baseQuotaRateWithFee,
+      collateralToken,
+      collateralSymbol,
+      collateralDecimals,
     }
   })
   const selectedCreditManager = selectBestCreditManagerForAmount(creditManagers, 1_000_000_000n)

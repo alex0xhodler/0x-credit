@@ -275,8 +275,25 @@ button {
 }
 
 .opportunity-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
+  max-height: 290px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.opportunity-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.opportunity-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.opportunity-list::-webkit-scrollbar-thumb {
+  background-color: rgba(23, 73, 54, 0.2);
+  border-radius: 10px;
 }
 
 .route-context .opportunity-list {
