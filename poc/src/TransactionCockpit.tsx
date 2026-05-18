@@ -49,7 +49,7 @@ const POWERED_BY_PARTNERS = [
   { name: 'KPK', logo: '/powered-by/kpk.svg' },
   { name: 'Beefy', logo: '/powered-by/beefy.svg' },
   { name: 'Edge UltraYield', logo: '/powered-by/edge-ultrayield.svg' },
-  { name: 'Curve', logo: '/powered-by/curve.svg' },
+  { name: 'Curve', logo: 'https://www.gearbox.finance/assets/partners/partner-curve.svg' },
 ] as const
 
 function stepStatusLabel(step: ExecutionStep): string {
