@@ -288,7 +288,7 @@ function GearboxApp() {
     opportunity.sdk.accounts
       .getBorrowerCreditAccounts(address, {
         creditManager: selectedRoute.address,
-        includeZeroDebt: false,
+        includeZeroDebt: true,
       })
       .then(accounts => {
         if (cancelled) return
