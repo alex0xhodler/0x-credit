@@ -198,7 +198,6 @@ function GearboxApp() {
   const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
   const [isCheckingPosition, setIsCheckingPosition] = useState(false)
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
-  const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
   const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
@@ -497,32 +496,6 @@ function GearboxApp() {
     switchChainAsync,
   ])
 
-  useEffect(() => {
-    if (!pendingStartAfterConnect || !isConnected || isExecuting || !selectedOpportunityIsExecutable) return
-    if (!opportunity || !selectedRoute || !amountRaw || routeWarning || isCheckingPosition) return
-    
-    if (hasOpenPosition && !forceNewAccount) {
-      setPendingStartAfterConnect(false)
-      setHasStartedFlow(false)
-      return
-    }
-
-    void handleExecute()
-  }, [
-    amountRaw,
-    forceNewAccount,
-    handleExecute,
-    hasOpenPosition,
-    isCheckingPosition,
-    isConnected,
-    isExecuting,
-    opportunity,
-    pendingStartAfterConnect,
-    routeWarning,
-    selectedRoute,
-    selectedOpportunityIsExecutable,
-  ])
-
   const activePositionStats = useMemo<ActivePositionStats | undefined>(() => {
     if (!activeCreditAccount || !opportunity) return undefined
     
@@ -569,7 +542,6 @@ function GearboxApp() {
           setExecutionError(displayedRouteWarning)
           return
         }
-        setPendingStartAfterConnect(true)
         if (isReownProjectConfigured) void open()
       }}
       onExecute={handleExecute}
@@ -577,6 +549,7 @@ function GearboxApp() {
         setExecutionError(undefined)
         setSelectedOpportunityId(nextOpportunity.id)
         setHasStartedFlow(true)
+        setForceNewAccount(true)
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
         if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
       }}

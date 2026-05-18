@@ -320,6 +320,17 @@ export function TransactionCockpit({
           </div>
         )}
 
+        {showExecution && hasStoredPosition && onViewPosition && (
+          <div className="route-context-note" style={{ marginTop: '16px', gap: '8px' }}>
+            <span>Active Smart account</span>
+            <div className="context-facts">
+              <button type="button" className="view-position-link" onClick={onViewPosition} style={{ marginTop: 0, width: '100%', textAlign: 'left', fontSize: '14px' }}>
+                View your active Smart account →
+              </button>
+            </div>
+          </div>
+        )}
+
         {showExecution && (
           <section className="position-explained" aria-label="Your position explained">
             <h3>Your position explained</h3>
