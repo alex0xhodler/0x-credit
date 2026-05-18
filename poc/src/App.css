@@ -278,12 +278,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 330px;
-  overflow-y: auto;
   padding-bottom: 24px;
-  scrollbar-width: none;
-  mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
 .opportunity-list::-webkit-scrollbar {
