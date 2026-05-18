@@ -289,6 +289,11 @@ button {
   object-fit: contain;
 }
 
+.powered-by-logo img[src*="kpk"],
+.powered-by-logo img[src*="beefy"] {
+  filter: brightness(0) invert(1);
+}
+
 .opportunity-card {
   position: relative;
   display: grid;
@@ -445,7 +450,7 @@ button {
   overflow: hidden;
   padding: 3px 6px;
   border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-  background: rgba(255, 247, 251, 0.66);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--muted);
   font-size: 0.76rem;
   font-weight: 950;
@@ -561,7 +566,7 @@ button {
   gap: 8px;
   border: 1px solid rgba(0, 168, 150, 0.16);
   border-radius: var(--surface-radius);
-  background: rgba(255, 247, 251, 0.62);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .route-context-note {
@@ -620,7 +625,7 @@ button {
   padding: 7px 9px;
   border: 1px solid rgba(0, 168, 150, 0.14);
   border-radius: var(--small-radius);
-  background: rgba(255, 253, 244, 0.68);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--ink-soft);
   font-size: 0.8rem;
   font-weight: 850;
@@ -705,7 +710,7 @@ button {
   border: 0;
   border-radius: var(--button-radius);
   outline: none;
-  background: rgba(255, 253, 244, 0.9);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--ink);
   font-family: "Suisse Intl", system-ui, sans-serif;
   font-size: clamp(1.25rem, 3vw, 1.8rem);
@@ -752,7 +757,7 @@ button {
   padding: 12px 14px;
   border: 1px solid rgba(199, 44, 91, 0.28);
   border-radius: var(--surface-radius);
-  background: #fff1f7;
+  background: rgba(255, 51, 51, 0.15);
   color: var(--ember);
   font-weight: 800;
   overflow-wrap: anywhere;
@@ -767,7 +772,7 @@ button {
   padding: 8px 14px;
   border: 1px solid rgba(0, 168, 150, 0.18);
   border-radius: var(--surface-radius);
-  background: rgba(225, 252, 247, 0.76);
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .flow-footer {
@@ -812,9 +817,7 @@ button {
   display: grid;
   gap: 14px;
   padding: clamp(28px, 6vw, 58px);
-  background:
-    linear-gradient(145deg, rgba(255, 247, 251, 0.96), rgba(225, 252, 247, 0.88)),
-    var(--paper);
+  background: var(--paper-raised);
 }
 
 .live-kicker {
@@ -863,7 +866,7 @@ button {
   padding: 10px 12px;
   border: 1px solid rgba(0, 168, 150, 0.16);
   border-radius: var(--small-radius);
-  background: rgba(255, 253, 244, 0.76);
+  background: rgba(0, 0, 0, 0.2);
   color: var(--moss);
   font-size: 0.9rem;
   font-weight: 850;
@@ -917,7 +920,7 @@ button {
   padding: 13px 16px;
   border: 1px solid var(--line);
   border-radius: var(--surface-radius);
-  background: rgba(255, 247, 251, 0.66);
+  background: rgba(0, 0, 0, 0.2);
   animation: fall-into-place 560ms cubic-bezier(0.16, 1, 0.3, 1) both;
   transition:
     border-color 220ms ease,
@@ -928,7 +931,7 @@ button {
 
 .step-card.active {
   border-color: rgba(0, 168, 150, 0.42);
-  background: rgba(225, 252, 247, 0.82);
+  background: rgba(0, 168, 150, 0.15);
   box-shadow: 0 16px 40px rgba(0, 109, 99, 0.12);
 }
 
@@ -944,7 +947,7 @@ button {
 
 .step-card.error {
   border-color: rgba(199, 44, 91, 0.34);
-  background: #fff1f7;
+  background: rgba(255, 51, 51, 0.15);
 }
 
 .step-index {

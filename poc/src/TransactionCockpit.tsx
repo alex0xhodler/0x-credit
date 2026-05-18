@@ -234,8 +234,8 @@ export function TransactionCockpit({
           </div>
         ) : (
           <div className="headline-grid">
-            <h1 className="hero-line">Earn amplified yield effortlessly</h1>
-            <p>Pick an opportunity, input the amount, and open your earn account.</p>
+            <h1 className="hero-line">Earn amplified yield on auto-pilot</h1>
+            <p>Pick a strategy, create Smart account, earn effortlessly</p>
           </div>
         )}
 
