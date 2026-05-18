@@ -25,13 +25,17 @@ function cm(overrides: {
 
 describe('Gearbox live opportunity selection', () => {
   it('uses the hosted Gearbox APY snapshot when no Vite override is configured', () => {
-    expect(GEARBOX_APY_URL).toBe('https://state-cache.gearbox.foundation/apy-server/latest.json')
+    expect(GEARBOX_APY_URL).toBe('/gearbox-apy/latest.json')
   })
 
-  it('ignores stale relative APY overrides from deployed Vite env', () => {
+  it('keeps the same-origin APY proxy path', () => {
     expect(resolveGearboxApyUrl('/gearbox-apy/latest.json')).toBe(
-      'https://state-cache.gearbox.foundation/apy-server/latest.json',
+      '/gearbox-apy/latest.json',
     )
+  })
+
+  it('ignores unsupported relative APY overrides', () => {
+    expect(resolveGearboxApyUrl('/other/latest.json')).toBe('/gearbox-apy/latest.json')
   })
 
   it('keeps absolute APY overrides when explicitly configured', () => {

@@ -17,12 +17,13 @@ export const DEFAULT_SLIPPAGE_BPS = 50
 export const DEFAULT_QUOTA_RESERVE_BPS = 500n
 export const TARGET_HEALTH_FACTOR_BPS = 10_300n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
-export const DEFAULT_GEARBOX_APY_URL = 'https://state-cache.gearbox.foundation/apy-server/latest.json'
+export const DEFAULT_GEARBOX_APY_URL = '/gearbox-apy/latest.json'
 export const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || 'https://rpc.monad.xyz'
 export const GEARBOX_APY_URL = resolveGearboxApyUrl(import.meta.env.VITE_GEARBOX_APY_URL)
 
 export function resolveGearboxApyUrl(url: string | undefined): string {
   if (!url) return DEFAULT_GEARBOX_APY_URL
+  if (url.startsWith('/gearbox-apy/')) return url
   try {
     const parsed = new URL(url)
     return parsed.protocol === 'https:' || parsed.protocol === 'http:'

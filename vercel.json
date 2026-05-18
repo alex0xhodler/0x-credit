@@ -1,5 +1,11 @@
 {
   "installCommand": "cd poc && npm install --include=dev",
   "buildCommand": "cd poc && npm run build",
-  "outputDirectory": "poc/dist"
+  "outputDirectory": "poc/dist",
+  "rewrites": [
+    {
+      "source": "/gearbox-apy/:path*",
+      "destination": "https://state-cache.gearbox.foundation/apy-server/:path*"
+    }
+  ]
 }
