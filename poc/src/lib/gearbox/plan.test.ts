@@ -35,7 +35,7 @@ describe('Gearbox planning helpers', () => {
   })
 
   it('formats live APY as an opportunity headline', () => {
-    expect(formatOpportunityApy(425_670)).toBe('up to 42.57% APY')
+    expect(formatOpportunityApy(425_670)).toBe('Current APY 42.57%')
     expect(formatOpportunityApy(undefined)).toBe('APY loading')
   })
 

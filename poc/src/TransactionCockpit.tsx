@@ -172,7 +172,7 @@ export function TransactionCockpit({
     : undefined
   const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen)
   const actionLabel = hasStartedFlow && isConnected
-    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('up to ', '')}`
+    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
     : 'Start earning'
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
   const displayError = error ? formatTransactionError(error) : undefined
@@ -237,18 +237,15 @@ export function TransactionCockpit({
             if (showExecution && !selected) return null
 
             return (
-              <article
+              <button
                 aria-label={`${item.tokenSymbol} on ${item.chainName} opportunity`}
                 className={`opportunity-card ${tone} ${selected ? 'selected' : ''}`}
                 key={item.id}
+                disabled={positionOpen}
+                type="button"
+                onClick={() => onSelectOpportunity?.(item)}
               >
-                <button
-                  aria-label={`${item.tokenSymbol} on ${item.chainName} ${item.apyLabel}`}
-                  className="opportunity-card-main"
-                  disabled={positionOpen}
-                  type="button"
-                  onClick={() => onSelectOpportunity?.(item)}
-                >
+                <div className="opportunity-card-main">
                   <span className={`opportunity-title ${tone}`}>
                     <TokenIcon symbol={item.tokenSymbol} />
                     <span className="asset-copy">
@@ -257,15 +254,12 @@ export function TransactionCockpit({
                     </span>
                   </span>
                   <span className="apy-pill">{item.apyLabel}</span>
-                </button>
+                </div>
 
                 <div className={`route-details ${showExecution ? 'inline-details' : ''}`}>
-                  <button
-                    type="button"
-                    onClick={() => onSelectOpportunity?.(item)}
-                  >
+                  <span className="show-details-pseudo-button">
                     Show details
-                  </button>
+                  </span>
                   <div className="facts-row" aria-label="Route facts">
                     <span>Pool: {item.strategyName}</span>
                     <span>Strategy: {item.strategyId}</span>
@@ -275,7 +269,7 @@ export function TransactionCockpit({
                   </div>
                 </div>
 
-              </article>
+              </button>
             )
           })}
         </div>
@@ -371,7 +365,7 @@ export function TransactionCockpit({
             <span className="value-label">Credit account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
             <div className="live-stats" aria-label="Position summary">
-              <span>Route APY <strong>{opportunity.apyLabel.replace('up to ', '').replace(' APY', '')}</strong></span>
+              <span>Route APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
             <p>Simulated live from the current route.</p>

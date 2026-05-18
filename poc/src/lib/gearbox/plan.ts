@@ -75,7 +75,7 @@ export function calculateApyForLeverage({
 
 export function formatOpportunityApy(maxApy: number | undefined): string {
   if (maxApy === undefined || Number.isNaN(maxApy)) return 'APY loading'
-  return `up to ${(maxApy / 10_000).toFixed(2)}% APY`
+  return `Current APY ${(maxApy / 10_000).toFixed(2)}%`
 }
 
 export function calculateLoopPlan({

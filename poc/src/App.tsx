@@ -63,7 +63,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   strategyName: 'WMoo Curve ETH+-WETH',
   tokenSymbol: 'WETH',
   chainName: 'Ethereum',
-  apyLabel: 'up to 14.08% APY',
+  apyLabel: 'Current APY 14.08%',
   leverageLabel: '7.60x target',
   protectionLabel: 'Mainnet route',
   minDepositLabel: 'Min deposit: 1.5 WETH',

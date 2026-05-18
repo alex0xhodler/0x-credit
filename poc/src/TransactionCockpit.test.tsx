@@ -10,7 +10,7 @@ const opportunity = {
   strategyName: 'Curve AUSD/USDC/USDT0',
   tokenSymbol: 'USDC',
   chainName: 'Monad',
-  apyLabel: 'up to 42.57% APY',
+  apyLabel: 'Current APY 42.57%',
   leverageLabel: '3.50x sweet spot',
   protectionLabel: 'Deleverage bot included',
 }
@@ -21,7 +21,7 @@ const wethOpportunity = {
   strategyName: 'WMoo Curve ETH+-WETH',
   tokenSymbol: 'WETH',
   chainName: 'Ethereum',
-  apyLabel: 'up to 14.08% APY',
+  apyLabel: 'Current APY 14.08%',
   leverageLabel: '7.60x target',
   protectionLabel: 'Mainnet route',
   minDepositLabel: 'Min deposit: 1.5 WETH',
@@ -63,10 +63,10 @@ describe('TransactionCockpit', () => {
     expect(screen.getByText('0x.credit')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /earn amplified yield on auto-pilot/i })).toBeInTheDocument()
     expect(screen.getByText('Pick a strategy, create Smart account, earn effortlessly')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /usdc on monad up to 42.57% apy/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /weth on ethereum up to 14.08% apy/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /usdc on monad opportunity/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /weth on ethereum opportunity/i })).toBeInTheDocument()
     const opportunityCard = screen.getByLabelText('USDC on Monad opportunity')
-    expect(within(opportunityCard).getByRole('button', { name: /show details/i })).toBeInTheDocument()
+    expect(within(opportunityCard).getByText('Show details')).toBeInTheDocument()
     expect(within(opportunityCard).getByText('Pool: Curve AUSD/USDC/USDT0')).toBeInTheDocument()
     const wethCard = screen.getByLabelText('WETH on Ethereum opportunity')
     expect(within(wethCard).getByText('Ethereum')).toBeInTheDocument()
@@ -86,7 +86,7 @@ describe('TransactionCockpit', () => {
     expect(within(poweredBy).getByRole('img', { name: 'Edge UltraYield' })).toBeInTheDocument()
     expect(within(poweredBy).getByRole('img', { name: 'Curve' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /usdc on monad up to 42.57% apy/i }))
+    fireEvent.click(screen.getByRole('button', { name: /usdc on monad opportunity/i }))
     expect(screen.getByLabelText('Deposit amount')).toHaveValue('1000')
     expect(screen.getAllByText('Pool: Curve AUSD/USDC/USDT0').length).toBeGreaterThan(0)
     expect(screen.queryByRole('region', { name: /powered by/i })).not.toBeInTheDocument()
@@ -116,7 +116,7 @@ describe('TransactionCockpit', () => {
 
     expect(screen.getByLabelText('Deposit amount')).toHaveValue('1.5')
     expect(screen.getByText('Ethereum execution is not wired in this PoC yet.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 14.08% apy/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /earn 14.08%/i })).toBeDisabled()
   })
 
   it('keeps the full transaction overview visible while the user confirms wallet prompts', () => {
@@ -157,7 +157,7 @@ describe('TransactionCockpit', () => {
     fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '250' } })
     expect(onAmountChange).toHaveBeenCalledWith('250')
 
-    fireEvent.click(screen.getByRole('button', { name: /earn 42.57% apy/i }))
+    fireEvent.click(screen.getByRole('button', { name: /earn 42.57%/i }))
     expect(onExecute).toHaveBeenCalledTimes(1)
   })
 
@@ -268,7 +268,7 @@ describe('TransactionCockpit', () => {
     )
 
     expect(screen.getByText('Set VITE_REOWN_PROJECT_ID to enable wallet connections.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 42.57% apy/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /earn 42.57%/i })).toBeDisabled()
   })
 
   it('blocks execution with a route warning when the amount cannot satisfy Gearbox limits safely', () => {
@@ -291,7 +291,7 @@ describe('TransactionCockpit', () => {
     )
 
     expect(screen.getByText('Enter at least 1,212.13 USDC for this route.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 42.57% apy/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /earn 42.57%/i })).toBeDisabled()
   })
 
   it('shows cancelled wallet prompts without leaking raw request arguments into the layout', () => {

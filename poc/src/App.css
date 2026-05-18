@@ -482,7 +482,7 @@ button {
   position: relative;
 }
 
-.route-details button {
+.show-details-pseudo-button {
   display: inline-flex;
   min-height: 16px;
   align-items: center;
@@ -490,7 +490,6 @@ button {
   border-bottom: 1px solid color-mix(in srgb, var(--acid) 52%, var(--ink-soft));
   background: transparent;
   color: inherit;
-  cursor: pointer;
   font-size: 0.76rem;
   font-weight: 900;
   letter-spacing: 0;
