@@ -79,6 +79,7 @@ interface StoredOpenPosition {
 }
 
 interface CreditAccountSnapshotLike {
+  creditAccount: Address
   creditManager: Address
   debt: bigint
   totalValue?: bigint
@@ -534,6 +535,12 @@ function GearboxApp() {
     ? displayedOpportunity.disabledReason
     : routeWarning
 
+  const manageUrl = hasStartedFlow && hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable
+    ? activeCreditAccount?.creditAccount
+      ? `https://app.gearbox.finance/accounts/${MONAD_CHAIN_ID}/${activeCreditAccount.creditAccount}/dashboard`
+      : GEARBOX_DASHBOARD_URL
+    : undefined
+
   return (
     <TransactionCockpit
       amount={amount}
@@ -545,7 +552,7 @@ function GearboxApp() {
       isProjectReady={isReownProjectConfigured}
       opportunity={displayedOpportunity}
       opportunities={opportunityViews}
-      manageUrl={hasStartedFlow && hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      manageUrl={manageUrl}
       hasStoredPosition={hasOpenPosition}
       onViewPosition={() => {
         setForceNewAccount(false)
