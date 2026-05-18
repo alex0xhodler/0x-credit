@@ -120,6 +120,12 @@ function TokenIcon({ symbol }: { symbol: string }) {
     )
   }
 
+  if (symbol.toUpperCase() === 'AUSD') {
+    return (
+      <img aria-hidden="true" className="token-icon ausd" src="/agora-bug--agora-gold.svg" alt="" />
+    )
+  }
+
   return (
     <img aria-hidden="true" className="token-icon usdc" src="https://cryptoicon.io/wp-content/uploads/cc-assets/SVG/Color/USDC.svg" alt="" />
   )
