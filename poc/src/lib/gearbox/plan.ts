@@ -145,9 +145,9 @@ export function createExecutionSteps({
   steps.push(
     {
       id: 'account',
-      label: 'Open credit account',
+      label: 'Open Smart account',
       detail: `Opening with the approved ${symbol}. Your deposit is supplied inside this wallet action.`,
-      walletPrompt: 'Confirm the account opening in your wallet.',
+      walletPrompt: 'Confirm the Smart account opening in your wallet.',
       mode: 'multicall',
       status: 'idle',
     },

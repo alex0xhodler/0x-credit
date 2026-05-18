@@ -62,7 +62,7 @@ describe('TransactionCockpit', () => {
 
     expect(screen.getByText('0x.credit')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /earn amplified yields on auto-pilot/i })).toBeInTheDocument()
-    expect(screen.getByText('Pick a Strategy, open your Earn account, start earning Effortlessly')).toBeInTheDocument()
+    expect(screen.getByText('Pick a Strategy, open your Smart account, start earning Effortlessly')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /usdc on monad opportunity/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /weth on ethereum opportunity/i })).toBeInTheDocument()
     const opportunityCard = screen.getByLabelText('USDC on Monad opportunity')
@@ -145,13 +145,13 @@ describe('TransactionCockpit', () => {
 
     expect(screen.getByLabelText('Deposit amount')).toHaveValue('100')
     expect(screen.getByText('Approve USDC')).toBeInTheDocument()
-    expect(screen.getByText('Open credit account')).toBeInTheDocument()
+    expect(screen.getByText('Open Smart account')).toBeInTheDocument()
     expect(screen.getByText('Opening with 100 USDC. The approved amount is supplied inside this wallet action.')).toBeInTheDocument()
     expect(screen.queryByText('Deposit USDC')).not.toBeInTheDocument()
     expect(screen.queryByText('Check best route')).not.toBeInTheDocument()
     expect(screen.queryByText('Keep position protected')).not.toBeInTheDocument()
     expect(screen.getByText('Confirm the token approval without leaving this page.')).toBeInTheDocument()
-    expect(screen.getByText('Confirm the account opening in your wallet.')).toBeInTheDocument()
+    expect(screen.getByText('Confirm the Smart account opening in your wallet.')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '250' } })
     expect(onAmountChange).toHaveBeenCalledWith('250')
@@ -217,8 +217,8 @@ describe('TransactionCockpit', () => {
 
     expect(screen.queryByText('Target')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('USDC amount')).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /account earning/i })).toBeInTheDocument()
-    expect(screen.getByText('Credit account value')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /smart account earning/i })).toBeInTheDocument()
+    expect(screen.getByText('Smart account value')).toBeInTheDocument()
     expect(screen.getByText('1,000.0000 USDC')).toBeInTheDocument()
     expect(screen.getByText('Position live')).toBeInTheDocument()
     expect(screen.getByText('42.57%')).toBeInTheDocument()
@@ -227,7 +227,7 @@ describe('TransactionCockpit', () => {
       'href',
       'https://app.gearbox.finance/dashboard',
     )
-    expect(screen.queryByRole('button', { name: /account earning/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /smart account earning/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('list', { name: /execution steps/i })).not.toBeInTheDocument()
   })
 

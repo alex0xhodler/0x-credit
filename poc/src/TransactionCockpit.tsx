@@ -232,7 +232,7 @@ export function TransactionCockpit({
         ) : (
           <div className="headline-grid">
             <h1 className="hero-line">Earn amplified yields on auto-pilot</h1>
-            <p>Pick a Strategy, open your Earn account, start earning Effortlessly</p>
+            <p>Pick a Strategy, open your Smart account, start earning Effortlessly</p>
           </div>
         )}
 
@@ -325,8 +325,8 @@ export function TransactionCockpit({
         {!positionOpen && hasStartedFlow && (
           <header className="flow-heading">
             <span>Selected strategy</span>
-            <h2>Open {opportunity.tokenSymbol} earn account</h2>
-            <p>Approve once, then open the account. The approved amount is supplied inside the account opening action.</p>
+            <h2>Open {opportunity.tokenSymbol} Smart account</h2>
+            <p>Approve once, then open the Smart account. The approved amount is supplied inside the Smart account opening action.</p>
           </header>
         )}
 
@@ -363,8 +363,8 @@ export function TransactionCockpit({
               <span>0x.credit</span>
               <strong>Position live</strong>
             </div>
-            <h2>Account earning</h2>
-            <span className="value-label">Credit account value</span>
+            <h2>Smart account earning</h2>
+            <span className="value-label">Smart account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
             <div className="live-stats" aria-label="Position summary">
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
