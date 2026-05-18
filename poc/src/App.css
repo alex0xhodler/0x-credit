@@ -851,86 +851,122 @@ button {
 
 .position-live {
   display: grid;
-  gap: 14px;
-  padding: clamp(28px, 6vw, 58px);
-  background: var(--paper-raised);
+  gap: 24px;
+  padding: 0;
+  background: transparent;
 }
 
 .live-kicker {
+  display: flex;
   justify-content: space-between;
   gap: 12px;
   color: var(--ink-soft);
-  font-size: 0.86rem;
-  font-weight: 900;
-}
-
-.live-kicker strong {
-  padding: 7px 10px;
-  border: 1px solid rgba(255, 107, 53, 0.22);
-  border-radius: var(--button-radius);
-  background: rgba(255, 107, 53, 0.16);
-  color: var(--moss);
-  font-size: 0.8rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
   text-transform: uppercase;
 }
 
+.live-kicker strong {
+  color: var(--primary);
+  font-weight: 500;
+}
+
 .position-live h2 {
-  max-width: 10ch;
-  margin: clamp(28px, 5vw, 52px) 0 4px;
+  max-width: 12ch;
+  margin: 0;
   color: var(--ink);
-  font-size: clamp(3.3rem, 8vw, 7rem);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 0.84;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 500;
+  letter-spacing: -2.16px;
+  line-height: 1;
 }
 
 .position-live > strong {
   color: var(--ink);
-  font-size: clamp(2.25rem, 6vw, 4.8rem);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 0.95;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(32px, 6vw, 48px);
+  font-weight: 500;
+  letter-spacing: -1px;
+  line-height: 1;
 }
 
 .live-stats {
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .live-stats span {
-  padding: 10px 12px;
-  border: 1px solid rgba(0, 168, 150, 0.16);
-  border-radius: var(--small-radius);
+  padding: 0;
+  border: none;
   background: transparent;
-  color: var(--moss);
-  font-size: 0.9rem;
-  font-weight: 850;
+  color: var(--ink-soft);
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.13px;
 }
 
 .live-stats strong {
   color: var(--ink);
+  font-weight: 700;
 }
 
 .position-live p {
-  margin: 0;
-  color: var(--muted);
-  font-weight: 800;
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+}
+
+.position-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 .manage-link {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: fit-content;
-  margin-top: 12px;
-  border-bottom: 1px solid currentColor;
-  color: var(--moss);
-  cursor: pointer;
-  font-weight: 950;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: var(--button-radius);
+  background: var(--ink);
+  color: #FFFFFF;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
   text-decoration: none;
+  transition: opacity 180ms ease;
 }
 
 .manage-link:hover {
-  color: var(--ink);
+  opacity: 0.9;
+  color: #FFFFFF;
+}
+
+.reset-flow-link {
+  display: inline-flex;
+  width: fit-content;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 150ms ease;
+}
+
+.reset-flow-link:hover {
+  text-decoration-color: currentColor;
 }
 
 .step-list {

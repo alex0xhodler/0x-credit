@@ -371,9 +371,16 @@ export function TransactionCockpit({
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
             <p>Simulated live from the current strategy.</p>
-            <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
-              Manage position
-            </a>
+            <div className="position-actions">
+              <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
+                Manage position
+              </a>
+              {onResetFlow && (
+                <button type="button" className="reset-flow-link" onClick={onResetFlow}>
+                  Create a new Smart account
+                </button>
+              )}
+            </div>
           </section>
         )}
 
