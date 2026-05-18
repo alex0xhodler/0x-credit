@@ -33,6 +33,14 @@ export interface TransactionCockpitProps {
   onSelectOpportunity?(opportunity: OpportunityView): void
 }
 
+const POWERED_BY_PARTNERS = [
+  { name: 'Gearbox', logo: '/powered-by/gearbox.png' },
+  { name: 'KPK', logo: '/powered-by/kpk.svg' },
+  { name: 'Beefy', logo: '/powered-by/beefy.svg' },
+  { name: 'Edge UltraYield', logo: '/powered-by/edge-ultrayield.svg' },
+  { name: 'Curve', logo: '/powered-by/curve.svg' },
+] as const
+
 function stepStatusLabel(step: ExecutionStep): string {
   if (step.status === 'active') return 'In progress'
   if (step.status === 'done') return 'Done'
@@ -278,6 +286,19 @@ export function TransactionCockpit({
             )
           })}
         </div>
+
+        {!showExecution && (
+          <section className="powered-by" aria-label="Powered by">
+            <span>Powered by</span>
+            <div className="powered-by-logos">
+              {POWERED_BY_PARTNERS.map(partner => (
+                <span className="powered-by-logo" key={partner.name}>
+                  <img alt={partner.name} src={partner.logo} />
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
 
         {showExecution && (
           <div className="route-context-note">
