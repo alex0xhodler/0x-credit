@@ -13,7 +13,7 @@
   --brass: #000000;
   --ember: #E42B0C;
   --primary: #E42B0C;
-  --monad: #b245ff;
+  --monad: #6E54FF;
   --ethereum: #2457ff;
   --card-border: rgba(0, 0, 0, 0.1);
   --card-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.1);
@@ -494,6 +494,7 @@ button {
 
 .opportunity-title.monad .asset-copy small {
   color: color-mix(in srgb, var(--monad) 72%, var(--ink));
+  font-family: "Inter", sans-serif;
 }
 
 .opportunity-title.ethereum .asset-copy small {
