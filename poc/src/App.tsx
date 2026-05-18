@@ -21,7 +21,7 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { TransactionCockpit, type OpportunityView } from './TransactionCockpit'
+import { TransactionCockpit, type OpportunityView, type ActivePositionStats } from './TransactionCockpit'
 import {
   config,
   isReownProjectConfigured,
@@ -79,6 +79,7 @@ interface StoredOpenPosition {
 }
 
 interface CreditAccountSnapshotLike {
+  creditAccount: Address
   creditManager: Address
   debt: bigint
   totalValue?: bigint
@@ -104,8 +105,9 @@ function clearStoredOpenPosition(address: Address, strategyId: string) {
   localStorage.removeItem(openPositionStorageKey(address, strategyId))
 }
 
-function creditAccountHasFunds(account: CreditAccountSnapshotLike, creditManager: Address): boolean {
-  if (account.creditManager.toLowerCase() !== creditManager.toLowerCase()) return false
+function creditAccountHasFunds(account: CreditAccountSnapshotLike, validCreditManagers: Address[]): boolean {
+  const isMatch = validCreditManagers.some(cm => cm.toLowerCase() === account.creditManager.toLowerCase())
+  if (!isMatch) return false
   if (account.debt > 0n) return true
   if ((account.totalValue ?? 0n) > 0n) return true
   return account.tokens?.some(token => token.balance > 0n) ?? false
@@ -116,7 +118,7 @@ createAppKit({
   projectId,
   networks,
   metadata,
-  enableReconnect: false,
+  enableReconnect: true,
   themeMode: 'light',
   themeVariables: {
     '--w3m-accent': '#ff6b35',
@@ -195,8 +197,8 @@ function GearboxApp() {
   const [steps, setSteps] = useState<ExecutionStep[]>([])
   const [approvalTarget, setApprovalTarget] = useState<Address>()
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
+  const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
-  const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
   const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
@@ -279,39 +281,56 @@ function GearboxApp() {
   useEffect(() => {
     let cancelled = false
 
-    if (!address || !opportunity || !selectedRoute) return
+    if (!address || !opportunity) {
+      return
+    }
 
-    const key = `${openPositionStorageKey(address, opportunity.strategyId)}:${selectedRoute.address.toLowerCase()}`
-    if (checkedOpenPositionKeys.current.has(key)) return
+    const key = `${openPositionStorageKey(address, opportunity.strategyId)}:all`
+    if (checkedOpenPositionKeys.current.has(key)) {
+      return
+    }
+    
     checkedOpenPositionKeys.current.add(key)
 
-    opportunity.sdk.accounts
-      .getBorrowerCreditAccounts(address, {
-        creditManager: selectedRoute.address,
+    const validCreditManagers = opportunity.creditManagers.map(cm => cm.address)
+    const fetches = validCreditManagers.map(cm => 
+      opportunity.sdk.accounts.getBorrowerCreditAccounts(address, {
+        creditManager: cm,
         includeZeroDebt: false,
+      }).catch(error => {
+        console.warn(`Failed to fetch accounts for CM ${cm}:`, error)
+        return []
       })
-      .then(accounts => {
+    )
+
+    Promise.all(fetches)
+      .then(results => {
         if (cancelled) return
-        const stillOpen = (accounts as CreditAccountSnapshotLike[]).some(account =>
-          creditAccountHasFunds(account, selectedRoute.address),
+        const allAccounts = results.flat() as CreditAccountSnapshotLike[]
+        const activeAccount = allAccounts.find(account =>
+          creditAccountHasFunds(account, validCreditManagers),
         )
+        const stillOpen = Boolean(activeAccount)
         setHasOpenPosition(stillOpen)
-        if (stillOpen) {
+        setActiveCreditAccount(activeAccount)
+        if (stillOpen && activeAccount) {
           storeOpenPosition({
             address,
-            creditManager: selectedRoute.address,
+            creditManager: activeAccount.creditManager,
             strategyId: opportunity.strategyId,
           })
         } else {
           clearStoredOpenPosition(address, opportunity.strategyId)
         }
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        console.error('Unexpected error fetching borrower credit accounts:', error)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [address, opportunity, selectedRoute])
+  }, [address, opportunity])
 
   const allowance = useReadContract({
     address: opportunity?.collateralToken,
@@ -330,14 +349,16 @@ function GearboxApp() {
       return
     }
 
-    setSteps(
-      createExecutionSteps({
+    setSteps(current => {
+      // Don't overwrite if we already have active or error steps
+      if (current.some(s => s.status === 'active' || s.status === 'error')) return current
+      return createExecutionSteps({
         allowance: allowance.data ?? 0n,
         amount: amountRaw,
         canBatch,
         symbol: opportunity.collateralSymbol,
-      }),
-    )
+      })
+    })
   }, [allowance.data, amountRaw, canBatch, isExecuting, opportunity])
 
   const runSequentialApproval = useCallback(
@@ -361,9 +382,11 @@ function GearboxApp() {
   )
 
   const handleExecute = useCallback(async () => {
-    if (!selectedOpportunityIsExecutable || !opportunity || !address || !amountRaw || !selectedRoute) return
+    if (!selectedOpportunityIsExecutable || !opportunity || !address || !amountRaw || !selectedRoute) {
+      alert(`Debug early return:\nExecutable: ${selectedOpportunityIsExecutable}\nOpp: ${!!opportunity}\nAddress: ${address}\nAmount: ${amountRaw}\nRoute: ${!!selectedRoute}`)
+      return
+    }
     setHasStartedFlow(true)
-    setPendingStartAfterConnect(false)
     if (routeWarning) {
       setExecutionError(routeWarning)
       return
@@ -458,10 +481,14 @@ function GearboxApp() {
       })
       setHasOpenPosition(true)
     } catch (error: unknown) {
+      console.error('Execution failed:', error)
       const message = formatTransactionError(error)
       const failedStep = nextSteps.find(step => step.status === 'active')?.id || 'account'
       setSteps(markStepError(nextSteps, failedStep, message))
       setExecutionError(message)
+      if (!message || message.length === 0) {
+        alert('An unknown error occurred during execution.')
+      }
     } finally {
       setIsExecuting(false)
     }
@@ -482,21 +509,16 @@ function GearboxApp() {
     switchChainAsync,
   ])
 
-  useEffect(() => {
-    if (!pendingStartAfterConnect || !isConnected || isExecuting || !selectedOpportunityIsExecutable) return
-    if (!opportunity || !selectedRoute || !amountRaw || routeWarning) return
-    void handleExecute()
-  }, [
-    amountRaw,
-    handleExecute,
-    isConnected,
-    isExecuting,
-    opportunity,
-    pendingStartAfterConnect,
-    routeWarning,
-    selectedRoute,
-    selectedOpportunityIsExecutable,
-  ])
+  const activePositionStats = useMemo<ActivePositionStats | undefined>(() => {
+    if (!activeCreditAccount || !opportunity) return undefined
+    
+    const divisor = 10 ** (opportunity.collateralDecimals || 6)
+    const totalValue = Number(activeCreditAccount.totalValue ?? 0n) / divisor
+    const debt = Number(activeCreditAccount.debt ?? 0n) / divisor
+    const netValue = totalValue - debt
+
+    return { totalValue, debt, netValue }
+  }, [activeCreditAccount, opportunity])
 
   const monadOpportunityView = baseOpportunityView(opportunity, selectedRoute)
   const displayedOpportunity = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID
@@ -507,19 +529,29 @@ function GearboxApp() {
     ? displayedOpportunity.disabledReason
     : routeWarning
 
+  const manageUrl = hasStartedFlow && hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable
+    ? activeCreditAccount?.creditAccount
+      ? `https://app.gearbox.finance/accounts/${MONAD_CHAIN_ID}/${activeCreditAccount.creditAccount}/dashboard`
+      : GEARBOX_DASHBOARD_URL
+    : undefined
+
   return (
     <TransactionCockpit
       amount={amount}
       accountStatus={isConnected ? 'connected' : 'disconnected'}
+      activePositionStats={selectedOpportunityIsExecutable ? activePositionStats : undefined}
       error={executionError || loadError}
       hasStartedFlow={hasStartedFlow}
       isBusy={isExecuting}
       isProjectReady={isReownProjectConfigured}
       opportunity={displayedOpportunity}
       opportunities={opportunityViews}
-      manageUrl={hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      manageUrl={manageUrl}
       hasStoredPosition={hasOpenPosition}
-      onViewPosition={() => setForceNewAccount(false)}
+      onViewPosition={() => {
+        setForceNewAccount(false)
+        setHasStartedFlow(true)
+      }}
       routeWarning={displayedRouteWarning}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
@@ -529,7 +561,6 @@ function GearboxApp() {
           setExecutionError(displayedRouteWarning)
           return
         }
-        setPendingStartAfterConnect(true)
         if (isReownProjectConfigured) void open()
       }}
       onExecute={handleExecute}
@@ -537,12 +568,14 @@ function GearboxApp() {
         setExecutionError(undefined)
         setSelectedOpportunityId(nextOpportunity.id)
         setHasStartedFlow(true)
+        setForceNewAccount(true)
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
         if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
       }}
       onResetFlow={() => {
         setHasStartedFlow(false)
         setForceNewAccount(true)
+        setExecutionError(undefined)
       }}
     />
   )

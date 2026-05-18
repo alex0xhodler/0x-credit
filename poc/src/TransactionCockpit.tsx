@@ -16,6 +16,12 @@ export interface OpportunityView {
   disabledReason?: string
 }
 
+export interface ActivePositionStats {
+  totalValue: number
+  debt: number
+  netValue: number
+}
+
 export interface TransactionCockpitProps {
   amount: string
   accountStatus: 'connected' | 'disconnected'
@@ -35,10 +41,11 @@ export interface TransactionCockpitProps {
   onResetFlow?(): void
   hasStoredPosition?: boolean
   onViewPosition?(): void
+  activePositionStats?: ActivePositionStats
 }
 
 const POWERED_BY_PARTNERS = [
-  { name: 'Gearbox', logo: '/powered-by/gearbox.png' },
+  { name: 'Gearbox', logo: 'https://docs.gearbox.finance/assets/brand/gearbox-icon.svg' },
   { name: 'KPK', logo: '/powered-by/kpk.svg' },
   { name: 'Beefy', logo: '/powered-by/beefy.svg' },
   { name: 'Edge UltraYield', logo: '/powered-by/edge-ultrayield.svg' },
@@ -118,11 +125,12 @@ function TokenIcon({ symbol }: { symbol: string }) {
   )
 }
 
-function useSimulatedPositionValue(amount: string, apyLabel: string, active: boolean): number {
+function useSimulatedPositionValue(amount: string, apyLabel: string, active: boolean, activeStats?: ActivePositionStats): number {
   const baseAmount = useMemo(() => {
+    if (activeStats) return activeStats.netValue
     const parsed = Number(amount)
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-  }, [amount])
+  }, [amount, activeStats])
   const apyPercent = useMemo(() => parseApyPercent(apyLabel) ?? 0, [apyLabel])
   const [elapsedMs, setElapsedMs] = useState(0)
 
@@ -163,22 +171,23 @@ export function TransactionCockpit({
   onResetFlow,
   hasStoredPosition,
   onViewPosition,
+  activePositionStats,
 }: TransactionCockpitProps) {
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
   const canUseOpportunity = opportunity.isExecutable !== false
   const canExecute = isConnected && isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
   const canStart = isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
-  const annualYield = estimateAnnualYield(amount, opportunity.apyLabel, opportunity.tokenSymbol)
+  const annualYield = estimateAnnualYield(activePositionStats ? String(activePositionStats.netValue) : amount, opportunity.apyLabel, opportunity.tokenSymbol)
   const parsedAmount = Number(amount)
   const displayAmount = Number.isFinite(parsedAmount) ? parsedAmount.toLocaleString() : amount
   const leverageMultiplier = parseLeverageMultiplier(opportunity.leverageLabel)
   const borrowedEstimate = leverageMultiplier && Number.isFinite(parsedAmount)
     ? Math.max(parsedAmount * (leverageMultiplier - 1), 0)
     : undefined
-  const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen)
+  const simulatedPositionValue = useSimulatedPositionValue(amount, opportunity.apyLabel, positionOpen, activePositionStats)
   const actionLabel = hasStartedFlow && isConnected
-    ? isBusy ? 'Opening position' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
+    ? isBusy ? 'Opening Smart account...' : `Earn ${opportunity.apyLabel.replace('Current APY ', '')}`
     : 'Start earning'
   const showExecution = hasStartedFlow || positionOpen || !isProjectReady || Boolean(error)
   const displayError = error ? formatTransactionError(error) : undefined
@@ -222,7 +231,7 @@ export function TransactionCockpit({
           <div className="route-masthead" aria-label="Selected route">
             <div className="route-crumbs">
               {onResetFlow ? (
-                <button type="button" className="breadcrumb-btn" onClick={onResetFlow}>Opportunities</button>
+                <button type="button" className="breadcrumb-btn" onClick={onResetFlow}>← Opportunities</button>
               ) : (
                 <span>Opportunities</span>
               )}
@@ -311,6 +320,17 @@ export function TransactionCockpit({
           </div>
         )}
 
+        {showExecution && hasStoredPosition && onViewPosition && (
+          <div className="route-context-note" style={{ marginTop: '16px', gap: '8px' }}>
+            <span>Active Smart account</span>
+            <div className="context-facts">
+              <button type="button" className="view-position-link" onClick={onViewPosition} style={{ marginTop: 0, width: '100%', textAlign: 'left', fontSize: '14px' }}>
+                View your active Smart account →
+              </button>
+            </div>
+          </div>
+        )}
+
         {showExecution && (
           <section className="position-explained" aria-label="Your position explained">
             <h3>Your position explained</h3>
@@ -327,6 +347,10 @@ export function TransactionCockpit({
       </section>}
 
       {showExecution && <section className="execution-panel" aria-label="0x.credit route">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <w3m-button size="sm" />
+        </div>
+
         {!isProjectReady && (
           <p className="alert">Set VITE_REOWN_PROJECT_ID to enable wallet connections.</p>
         )}
@@ -373,9 +397,17 @@ export function TransactionCockpit({
               <strong>Position live</strong>
             </div>
             <h2>Smart account earning</h2>
+            
             <span className="value-label">Smart account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
+
             <div className="live-stats" aria-label="Position summary">
+              {activePositionStats && (
+                <>
+                  <span>Total value <strong>{formatPositionValue(activePositionStats.totalValue, opportunity.tokenSymbol)}</strong></span>
+                  <span>Debt <strong>{formatPositionValue(activePositionStats.debt, opportunity.tokenSymbol)}</strong></span>
+                </>
+              )}
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
