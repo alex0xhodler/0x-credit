@@ -327,6 +327,10 @@ button {
   object-fit: contain;
 }
 
+.powered-by-logo img[src*="gearbox"] {
+  filter: invert(1);
+}
+
 .opportunity-card {
   position: relative;
   display: grid;
