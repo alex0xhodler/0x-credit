@@ -54,12 +54,33 @@ body::after {
 }
 
 h1, .hero-line {
-  font-family: "Manrope", system-ui, sans-serif;
-  font-size: 72px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 56px;
   line-height: 72px;
   letter-spacing: -2.16px;
-  font-weight: 500;
+  font-weight: 600;
   margin: 0;
+  font-feature-settings: normal;
+  font-kerning: auto;
+  font-language-override: normal;
+  font-optical-sizing: auto;
+  font-palette: normal;
+  font-size-adjust: none;
+  font-stretch: 100%;
+  font-style: normal;
+  font-synthesis-position: auto;
+  font-synthesis-small-caps: auto;
+  font-synthesis-style: auto;
+  font-synthesis-weight: auto;
+  font-variant-alternates: normal;
+  font-variant-caps: normal;
+  font-variant-east-asian: normal;
+  font-variant-emoji: normal;
+  font-variant-ligatures: normal;
+  font-variant-numeric: normal;
+  font-variant-position: normal;
+  font-variation-settings: normal;
+  -moz-osx-font-smoothing: auto;
 }
 
 h2 {
