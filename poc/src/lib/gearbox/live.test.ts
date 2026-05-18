@@ -20,6 +20,9 @@ function cm(overrides: {
     availableToBorrow: overrides.availableToBorrow ?? 1_000_000_000_000n,
     baseBorrowRate: 10_000,
     baseQuotaRateWithFee: 0n,
+    collateralToken: '0x0000000000000000000000000000000000000000' as Address,
+    collateralSymbol: 'USDC',
+    collateralDecimals: 6,
   }
 }
 
