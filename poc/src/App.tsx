@@ -45,7 +45,6 @@ import {
   type GearboxCreditManagerRoute,
   loadGearboxOpportunity,
   MONAD_CHAIN_ID,
-  selectBestCreditManagerForAmount,
   STRATEGY_ID,
   type LoadedGearboxOpportunity,
 } from './lib/gearbox/live'
@@ -164,16 +163,6 @@ function baseOpportunityView(
   }
 }
 
-function minimumDepositMessage(
-  opportunity: LoadedGearboxOpportunity,
-  minimumDepositAmount: bigint,
-): string {
-  return `Enter at least ${formatTokenAmount(
-    minimumDepositAmount,
-    opportunity.collateralDecimals,
-  )} ${opportunity.collateralSymbol} to keep this strategy above 1.03 HF and the strategy minimum debt.`
-}
-
 function GearboxApp() {
   const { open } = useAppKit()
   const { address, isConnected } = useAccount()
@@ -199,35 +188,95 @@ function GearboxApp() {
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
   const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string>(MONAD_USDC_OPPORTUNITY_ID)
   const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
-  const selectedOpportunityIsExecutable = selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID
+  
+  const selectedOpportunityIsExecutable = selectedOpportunityId !== MAINNET_WETH_OPPORTUNITY_ID
+
+  const opportunityViews = useMemo(() => {
+    const views: OpportunityView[] = []
+    if (opportunity) {
+      const uniqueRoutes = new Map<string, typeof opportunity.creditManagers[0]>()
+      
+      for (const route of opportunity.creditManagers) {
+        if (route.maxDebt > 0n) {
+          const existing = uniqueRoutes.get(route.collateralToken)
+          if (!existing || route.maxDebt > existing.maxDebt) {
+            uniqueRoutes.set(route.collateralToken, route)
+          }
+        }
+      }
+
+      const sortedRoutes = Array.from(uniqueRoutes.values()).sort((a, b) => {
+        if (a.maxDebt !== b.maxDebt) return a.maxDebt > b.maxDebt ? -1 : 1
+        return 0
+      })
+
+      const seenSymbols = new Set<string>()
+
+      sortedRoutes.forEach(route => {
+        let displaySymbol = route.collateralSymbol
+        if (displaySymbol === 'USDC' && seenSymbols.has('USDC')) {
+          displaySymbol = 'USDT0'
+        }
+        seenSymbols.add(displaySymbol)
+
+        views.push({
+          id: `monad-${route.address}`,
+          strategyId: STRATEGY_ID,
+          strategyName: opportunity.strategyName,
+          tokenSymbol: displaySymbol,
+          chainName: 'Monad',
+          apyLabel: formatOpportunityApy(route.apy),
+          leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
+          protectionLabel: opportunity.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
+          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
+        })
+      })
+    } else {
+      views.push(baseOpportunityView(undefined, undefined))
+    }
+    views.push(MAINNET_WETH_OPPORTUNITY)
+    return views
+  }, [opportunity])
+
+  useEffect(() => {
+    if (opportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
+      const firstMonad = opportunityViews.find(v => v.id.startsWith('monad-'))
+      if (firstMonad) {
+        setSelectedOpportunityId(firstMonad.id)
+      }
+    }
+  }, [opportunity, opportunityViews, selectedOpportunityId])
+
+  const displayedOpportunity = useMemo(() => {
+    return opportunityViews.find(v => v.id === selectedOpportunityId) || opportunityViews[0]
+  }, [opportunityViews, selectedOpportunityId])
+
+  const selectedRoute = useMemo(() => {
+    if (!opportunity || !selectedOpportunityId || !selectedOpportunityId.startsWith('monad-')) return undefined
+    const routeAddress = selectedOpportunityId.replace('monad-', '')
+    return opportunity.creditManagers.find(cm => cm.address === routeAddress)
+  }, [opportunity, selectedOpportunityId])
 
   const amountRaw = useMemo(
-    () => parseTokenAmount(amount, opportunity?.collateralDecimals || 6),
-    [amount, opportunity?.collateralDecimals],
-  )
-  const selectedRoute = useMemo(
-    () => opportunity
-      ? selectBestCreditManagerForAmount(opportunity.creditManagers, amountRaw)
-      : undefined,
-    [amountRaw, opportunity],
+    () => parseTokenAmount(amount, selectedRoute?.collateralDecimals || opportunity?.collateralDecimals || 6),
+    [amount, selectedRoute?.collateralDecimals, opportunity?.collateralDecimals],
   )
   const canBatch = supportsAtomicBatch(capabilities.data)
+  
   const routeWarning = useMemo(() => {
-    if (!opportunity || !amountRaw || selectedRoute) return undefined
+    if (!opportunity || !amountRaw || !selectedRoute) return undefined
 
-    const lowestMinimumDeposit = opportunity.creditManagers.reduce<bigint | undefined>(
-      (lowest, route) => lowest === undefined || route.minimumDepositAmount < lowest
-        ? route.minimumDepositAmount
-        : lowest,
-      undefined,
-    )
-    if (lowestMinimumDeposit !== undefined && amountRaw < lowestMinimumDeposit) {
-      return minimumDepositMessage(opportunity, lowestMinimumDeposit)
+    if (amountRaw < selectedRoute.minimumDepositAmount) {
+      return `Enter at least ${formatTokenAmount(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.03 HF and the strategy minimum debt.`
     }
-    return 'This amount is outside the current debt limits for this strategy.'
+    const debt = (amountRaw * (selectedRoute.maxLeverage - 100n)) / 100n
+    if (debt < selectedRoute.minDebt || debt > selectedRoute.maxDebt || debt > selectedRoute.availableToBorrow) {
+      return 'This amount is outside the current debt limits for this strategy.'
+    }
+    return undefined
   }, [amountRaw, opportunity, selectedRoute])
 
   useEffect(() => {
@@ -333,33 +382,32 @@ function GearboxApp() {
   }, [address, opportunity])
 
   const allowance = useReadContract({
-    address: opportunity?.collateralToken,
+    address: selectedRoute?.collateralToken,
     abi: erc20Abi,
     functionName: 'allowance',
     args: address && approvalTarget ? [address, approvalTarget] : undefined,
     query: {
-      enabled: Boolean(address && approvalTarget && opportunity?.collateralToken),
+      enabled: Boolean(address && approvalTarget && selectedRoute?.collateralToken),
     },
   })
 
   useEffect(() => {
     if (isExecuting) return
-    if (!amountRaw || !opportunity) {
+    if (!amountRaw || !selectedRoute) {
       setSteps([])
       return
     }
 
     setSteps(current => {
-      // Don't overwrite if we already have active or error steps
       if (current.some(s => s.status === 'active' || s.status === 'error')) return current
       return createExecutionSteps({
         allowance: allowance.data ?? 0n,
         amount: amountRaw,
         canBatch,
-        symbol: opportunity.collateralSymbol,
+        symbol: selectedRoute.collateralSymbol,
       })
     })
-  }, [allowance.data, amountRaw, canBatch, isExecuting, opportunity])
+  }, [allowance.data, amountRaw, canBatch, isExecuting, selectedRoute])
 
   const runSequentialApproval = useCallback(
     async (currentSteps: ExecutionStep[], token: Address, target: Address, depositAmount: bigint) => {
@@ -372,7 +420,7 @@ function GearboxApp() {
         args: [target, depositAmount],
       })
       const approvalReceipt = await publicClient?.waitForTransactionReceipt({ hash: approvalHash })
-      assertSuccessfulReceipt(approvalReceipt, 'USDC approval failed on-chain.')
+      assertSuccessfulReceipt(approvalReceipt, 'Token approval failed on-chain.')
       nextSteps = markStepDone(nextSteps, 'approve', approvalHash)
       setSteps(nextSteps)
       await allowance.refetch()
@@ -399,7 +447,7 @@ function GearboxApp() {
       allowance: allowance.data ?? 0n,
       amount: amountRaw,
       canBatch,
-      symbol: opportunity.collateralSymbol,
+      symbol: selectedRoute.collateralSymbol,
     })
     setSteps(nextSteps)
 
@@ -413,7 +461,7 @@ function GearboxApp() {
         sdk: opportunity.sdk,
         borrower: address,
         creditManager: selectedRoute.address,
-        collateralToken: opportunity.collateralToken,
+        collateralToken: selectedRoute.collateralToken,
         targetToken: opportunity.targetToken,
         collateralAmount: amountRaw,
         leverage: selectedRoute.maxLeverage,
@@ -437,7 +485,7 @@ function GearboxApp() {
           chainId: MONAD_CHAIN_ID,
           calls: [
             {
-              to: opportunity.collateralToken,
+              to: selectedRoute.collateralToken,
               data: approveData,
             },
             {
@@ -456,7 +504,7 @@ function GearboxApp() {
       if (needsApproval) {
         nextSteps = await runSequentialApproval(
           nextSteps,
-          opportunity.collateralToken,
+          selectedRoute.collateralToken,
           prepared.approvalTarget as Address,
           amountRaw,
         )
@@ -510,21 +558,16 @@ function GearboxApp() {
   ])
 
   const activePositionStats = useMemo<ActivePositionStats | undefined>(() => {
-    if (!activeCreditAccount || !opportunity) return undefined
+    if (!activeCreditAccount || !selectedRoute) return undefined
     
-    const divisor = 10 ** (opportunity.collateralDecimals || 6)
+    const divisor = 10 ** (selectedRoute.collateralDecimals || 6)
     const totalValue = Number(activeCreditAccount.totalValue ?? 0n) / divisor
     const debt = Number(activeCreditAccount.debt ?? 0n) / divisor
     const netValue = totalValue - debt
 
     return { totalValue, debt, netValue }
-  }, [activeCreditAccount, opportunity])
+  }, [activeCreditAccount, selectedRoute])
 
-  const monadOpportunityView = baseOpportunityView(opportunity, selectedRoute)
-  const displayedOpportunity = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID
-    ? MAINNET_WETH_OPPORTUNITY
-    : monadOpportunityView
-  const opportunityViews = [monadOpportunityView, MAINNET_WETH_OPPORTUNITY]
   const displayedRouteWarning = displayedOpportunity.isExecutable === false
     ? displayedOpportunity.disabledReason
     : routeWarning
@@ -570,7 +613,7 @@ function GearboxApp() {
         setHasStartedFlow(true)
         setForceNewAccount(true)
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
-        if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
+        if (nextOpportunity.id.startsWith('monad-') && !amount) setAmount('1000')
       }}
       onResetFlow={() => {
         setHasStartedFlow(false)
