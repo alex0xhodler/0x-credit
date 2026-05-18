@@ -120,7 +120,7 @@ button {
 .opportunity-panel,
 .execution-panel,
 .position-live {
-  border: 1px solid var(--line);
+  border: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -246,17 +246,20 @@ button {
 
 .route-masthead > strong {
   color: var(--ink);
-  font-size: clamp(1.25rem, 2.6vw, 1.65rem);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 1;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 500;
+  letter-spacing: -0.72px;
+  line-height: 1.1;
 }
 
 .route-masthead p {
   margin: 0;
-  color: var(--moss);
-  font-size: 0.92rem;
-  font-weight: 850;
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
 }
 
 .hero-line {
@@ -704,6 +707,10 @@ button {
 .flow-heading h2 {
   margin: 0;
   color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1.1;
+  letter-spacing: -1px;
 }
 
 .flow-heading p {
@@ -720,10 +727,11 @@ button {
 .amount-field span,
 .journey-summary span,
 .position-live .value-label {
-  color: color-mix(in srgb, var(--moss) 72%, var(--ink));
-  font-size: 0.78rem;
-  font-weight: 950;
-  letter-spacing: 0.05em;
+  color: var(--ink);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
@@ -803,8 +811,10 @@ button {
 
 .journey-summary strong {
   color: var(--ink);
-  font-size: 1.02rem;
-  font-weight: 950;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.72px;
 }
 
 .journey-summary p {
@@ -816,7 +826,8 @@ button {
 
 .position-explained {
   gap: 8px;
-  padding: 12px 14px;
+  padding: 0;
+  margin-top: 8px;
 }
 
 .position-explained h3 {
@@ -1157,12 +1168,12 @@ button {
   .shell.is-expanded .opportunity-panel {
     position: sticky;
     top: 24px;
-    gap: 18px;
-    padding: clamp(22px, 2.5vw, 30px);
+    gap: 32px;
+    padding: 0;
   }
 
   .shell.is-expanded .execution-panel {
-    padding: clamp(22px, 2.4vw, 30px);
+    padding: 0;
   }
 
   .shell.is-expanded .route-topline {
@@ -1201,7 +1212,7 @@ button {
   .opportunity-panel,
   .execution-panel,
   .position-live {
-    padding: 22px;
+    padding: 0;
   }
 
   .hero-line,
