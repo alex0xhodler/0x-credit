@@ -18,7 +18,7 @@ Required:
 Optional:
 
 - `VITE_MONAD_RPC_URL`: Monad RPC used by the Gearbox SDK. Defaults to `https://rpc.monad.xyz`.
-- `VITE_GEARBOX_APY_URL`: APY snapshot URL. Defaults to `/gearbox-apy/latest.json`.
+- `VITE_GEARBOX_APY_URL`: APY snapshot URL. Defaults to `https://state-cache.gearbox.foundation/apy-server/latest.json`.
 
 ## Resources
 

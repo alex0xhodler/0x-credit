@@ -18,7 +18,8 @@ export const DEFAULT_QUOTA_RESERVE_BPS = 500n
 export const TARGET_HEALTH_FACTOR_BPS = 10_300n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
 export const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || 'https://rpc.monad.xyz'
-export const GEARBOX_APY_URL = import.meta.env.VITE_GEARBOX_APY_URL || '/gearbox-apy/latest.json'
+export const GEARBOX_APY_URL = import.meta.env.VITE_GEARBOX_APY_URL
+  || 'https://state-cache.gearbox.foundation/apy-server/latest.json'
 
 interface StrategyConfigLike {
   id: string

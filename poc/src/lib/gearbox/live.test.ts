@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { selectBestCreditManagerForAmount } from './live'
+import { GEARBOX_APY_URL, selectBestCreditManagerForAmount } from './live'
 
 function cm(overrides: {
   address: Address
@@ -24,6 +24,10 @@ function cm(overrides: {
 }
 
 describe('Gearbox live opportunity selection', () => {
+  it('uses the hosted Gearbox APY snapshot when no Vite override is configured', () => {
+    expect(GEARBOX_APY_URL).toBe('https://state-cache.gearbox.foundation/apy-server/latest.json')
+  })
+
   it('uses the lower-min-debt credit manager when the better-APY route is incompatible', () => {
     const highMin = '0x0000000000000000000000000000000000000001' as Address
     const lowMin = '0x0000000000000000000000000000000000000002' as Address
