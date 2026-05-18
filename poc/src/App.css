@@ -1,22 +1,25 @@
 :root {
-  --ink: #211529;
-  --ink-soft: #4d3558;
-  --muted: #77607f;
-  --paper: #fff7fb;
-  --paper-raised: #fffdf4;
-  --canvas: #180f24;
-  --line: rgba(81, 48, 96, 0.16);
-  --line-strong: rgba(81, 48, 96, 0.28);
+  --ink: #ffffff;
+  --ink-soft: #f4e5eb;
+  --muted: #a49ea8;
+  --paper: #19141c;
+  --paper-raised: #281d2e;
+  --canvas: #0e0a12;
+  --line: rgba(255, 107, 53, 0.16);
+  --line-strong: rgba(255, 107, 53, 0.28);
   --moss: #006d63;
   --moss-bright: #00a896;
   --acid: #ff6b35;
   --brass: #ffb000;
-  --ember: #c72c5b;
+  --ember: #ff3333;
   --monad: #b245ff;
   --ethereum: #2457ff;
+  --card-border: rgba(255, 107, 53, 0.2);
+  --card-shadow: 0 4px 12px rgba(255, 107, 53, 0.05);
   --surface-radius: 24px;
   --button-radius: 28px;
   --small-radius: 12px;
+
   color: var(--ink);
   background: var(--canvas);
   font-family:
@@ -108,14 +111,10 @@ button {
 .opportunity-panel,
 .execution-panel,
 .position-live {
-  border: 1px solid rgba(255, 247, 251, 0.2);
+  border: 1px solid var(--card-border);
   border-radius: var(--surface-radius);
-  background:
-    linear-gradient(180deg, rgba(255, 247, 251, 0.96), rgba(244, 235, 255, 0.92)),
-    var(--paper);
-  box-shadow:
-    0 34px 90px rgba(13, 6, 24, 0.34),
-    inset 0 1px rgba(255, 253, 244, 0.82);
+  background: var(--paper);
+  box-shadow: var(--card-shadow);
 }
 
 .opportunity-panel {
@@ -224,10 +223,10 @@ button {
   max-width: 9.8ch;
   margin: 0;
   color: var(--ink);
-  font-size: clamp(3.15rem, 6.6vw, 5.45rem);
+  font-size: clamp(2.5rem, 5vw, 4.2rem);
   font-weight: 950;
   letter-spacing: 0;
-  line-height: 0.86;
+  line-height: 0.9;
 }
 
 .headline-grid p {
@@ -276,9 +275,9 @@ button {
   align-items: center;
   justify-content: center;
   padding: 10px 12px;
-  border: 1px solid rgba(23, 73, 54, 0.11);
-  border-radius: 2px;
-  background: rgba(255, 248, 232, 0.42);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .powered-by-logo img {
@@ -298,11 +297,9 @@ button {
   width: 100%;
   min-height: 102px;
   padding: 18px 18px 17px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--card-border);
   border-radius: var(--surface-radius);
-  background:
-    linear-gradient(135deg, rgba(255, 253, 244, 0.94), rgba(255, 238, 248, 0.78)),
-    var(--paper-raised);
+  background: var(--paper-raised);
   color: var(--ink);
   text-align: left;
   transition:
@@ -332,9 +329,7 @@ button {
 
 .route-context .opportunity-card {
   padding: 16px;
-  background:
-    linear-gradient(135deg, rgba(255, 253, 244, 0.78), rgba(255, 238, 248, 0.55)),
-    var(--paper-raised);
+  background: var(--paper-raised);
   box-shadow: none;
 }
 

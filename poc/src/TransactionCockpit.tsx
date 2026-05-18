@@ -72,7 +72,7 @@ function parseApyPercent(apyLabel: string): number | undefined {
 }
 
 function formatPositionValue(value: number, symbol: string): string {
-  return `${value.toLocaleString(undefined, {
+  return `${value.toLocaleString('en-US', {
     maximumFractionDigits: 4,
     minimumFractionDigits: 4,
   })} ${symbol}`
@@ -380,7 +380,7 @@ export function TransactionCockpit({
             <span className="value-label">Credit account value</span>
             <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
             <div className="live-stats" aria-label="Position summary">
-              <span>Route APY <strong>{opportunity.apyLabel.replace('up to ', '')}</strong></span>
+              <span>Route APY <strong>{opportunity.apyLabel.replace('up to ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
             <p>Simulated live from the current route.</p>

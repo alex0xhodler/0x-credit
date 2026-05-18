@@ -222,7 +222,7 @@ describe('TransactionCockpit', () => {
     expect(screen.getByText('Credit account value')).toBeInTheDocument()
     expect(screen.getByText('1,000.0000 USDC')).toBeInTheDocument()
     expect(screen.getByText('Position live')).toBeInTheDocument()
-    expect(screen.getByText('42.57% APY')).toBeInTheDocument()
+    expect(screen.getByText('42.57%')).toBeInTheDocument()
     expect(screen.getByText('425.70 USDC / year')).toBeInTheDocument()
     expect(screen.getByText('Simulated live from the current route.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /manage position/i })).toHaveAttribute(
