@@ -222,12 +222,9 @@ export function TransactionCockpit({
   return (
     <main className={`shell ${positionOpen ? 'is-invested' : showExecution ? 'is-expanded' : 'is-landing'}`} ref={shellRef}>
       {!positionOpen && <section className={`opportunity-panel ${showExecution ? 'route-context' : ''}`} aria-label="0x.credit opportunities">
-        <div className="brand-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <span className="brand-mark" aria-hidden="true">0x</span>
-            <span>0x.credit</span>
-          </div>
-          {showExecution && <w3m-button size="sm" />}
+        <div className="brand-row">
+          <span className="brand-mark" aria-hidden="true">0x</span>
+          <span>0x.credit</span>
         </div>
 
         {showExecution ? (
@@ -350,6 +347,10 @@ export function TransactionCockpit({
       </section>}
 
       {showExecution && <section className="execution-panel" aria-label="0x.credit route">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <w3m-button size="sm" />
+        </div>
+
         {!isProjectReady && (
           <p className="alert">Set VITE_REOWN_PROJECT_ID to enable wallet connections.</p>
         )}
