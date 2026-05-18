@@ -199,6 +199,7 @@ function GearboxApp() {
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
+  const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   const selectedOpportunityIsExecutable = selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID
 
@@ -288,7 +289,7 @@ function GearboxApp() {
     opportunity.sdk.accounts
       .getBorrowerCreditAccounts(address, {
         creditManager: selectedRoute.address,
-        includeZeroDebt: true,
+        includeZeroDebt: false,
       })
       .then(accounts => {
         if (cancelled) return
