@@ -61,8 +61,8 @@ describe('TransactionCockpit', () => {
     )
 
     expect(screen.getByText('0x.credit')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /earn amplified yield on auto-pilot/i })).toBeInTheDocument()
-    expect(screen.getByText('Pick a strategy, create Smart account, earn effortlessly')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /earn amplified yields on auto-pilot/i })).toBeInTheDocument()
+    expect(screen.getByText('Pick a Strategy, open your Earn account, start earning Effortlessly')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /usdc on monad opportunity/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /weth on ethereum opportunity/i })).toBeInTheDocument()
     const opportunityCard = screen.getByLabelText('USDC on Monad opportunity')
