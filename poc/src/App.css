@@ -1,21 +1,22 @@
 :root {
-  --ink: #ffffff;
-  --ink-soft: #f4e5eb;
-  --muted: #a49ea8;
-  --paper: #19141c;
-  --paper-raised: #281d2e;
-  --canvas: #0e0a12;
-  --line: rgba(255, 107, 53, 0.16);
-  --line-strong: rgba(255, 107, 53, 0.28);
-  --moss: #006d63;
-  --moss-bright: #00a896;
-  --acid: #ff6b35;
-  --brass: #ffb000;
-  --ember: #ff3333;
+  --ink: #000000;
+  --ink-soft: rgb(100, 100, 100);
+  --muted: rgb(100, 100, 100);
+  --paper: #FFFFFF;
+  --paper-raised: #FFFFFF;
+  --canvas: #FFFFFF;
+  --line: rgba(0, 0, 0, 0.1);
+  --line-strong: rgba(0, 0, 0, 0.2);
+  --moss: #000000;
+  --moss-bright: #000000;
+  --acid: #E42B0C;
+  --brass: #000000;
+  --ember: #E42B0C;
+  --primary: #E42B0C;
   --monad: #b245ff;
   --ethereum: #2457ff;
-  --card-border: rgba(255, 107, 53, 0.2);
-  --card-shadow: 0 4px 12px rgba(255, 107, 53, 0.05);
+  --card-border: rgba(0, 0, 0, 0.1);
+  --card-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.1);
   --surface-radius: 8px;
   --button-radius: 6px;
   --small-radius: 4px;
@@ -23,12 +24,8 @@
   color: var(--ink);
   background: var(--canvas);
   font-family:
-    "Suisse Intl",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
+    "Arial",
+    "Helvetica",
     sans-serif;
   font-synthesis: none;
   line-height: 1.5;
@@ -54,6 +51,42 @@ body::before {
 
 body::after {
   display: none;
+}
+
+h1, .hero-line {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 72px;
+  line-height: 72px;
+  letter-spacing: -2.16px;
+  font-weight: 500;
+  margin: 0;
+}
+
+h2 {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: -0.72px;
+  font-weight: 500;
+  margin: 0;
+}
+
+h3 {
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 20px;
+  line-height: 30px;
+  letter-spacing: -0.2px;
+  font-weight: 700;
+  margin: 0;
+}
+
+p, .body-text {
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 14px;
+  line-height: 21px;
+  letter-spacing: -0.13px;
+  font-weight: 400;
+  margin: 0;
 }
 
 button,
@@ -126,9 +159,10 @@ button {
 
 .brand-row {
   gap: 12px;
-  color: var(--ink-soft);
-  font-size: 0.95rem;
-  font-weight: 850;
+  color: var(--ink);
+  font-family: "League Gothic", sans-serif;
+  font-size: 1.5rem;
+  letter-spacing: 1px;
 }
 
 .brand-mark {
@@ -213,13 +247,8 @@ button {
 }
 
 .hero-line {
-  max-width: 9.8ch;
-  margin: 0;
   color: var(--ink);
-  font-size: clamp(2.5rem, 5vw, 4.2rem);
-  font-weight: 950;
-  letter-spacing: 0;
-  line-height: 0.9;
+  max-width: 12ch;
 }
 
 .headline-grid p {
@@ -270,7 +299,7 @@ button {
   padding: 10px 12px;
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--paper-raised);
 }
 
 .powered-by-logo img {
@@ -280,11 +309,6 @@ button {
   height: auto;
   max-height: 28px;
   object-fit: contain;
-}
-
-.powered-by-logo img[src*="kpk"],
-.powered-by-logo img[src*="beefy"] {
-  filter: brightness(0) invert(1);
 }
 
 .opportunity-card {
@@ -714,26 +738,23 @@ button {
 }
 
 .primary-action {
-  min-height: 56px;
-  height: 56px;
+  min-height: 48px;
+  height: 48px;
   width: 100%;
   padding: 12px 24px;
   border: 0;
   border-radius: var(--button-radius);
-  background: linear-gradient(135deg, #ff6b35, #ffb000);
-  color: #211529;
+  background: var(--primary);
+  color: #FFFFFF;
   cursor: pointer;
   font-size: 16px;
-  font-weight: 450;
-  letter-spacing: 0;
-  transition:
-    transform 180ms ease,
-    filter 180ms ease,
-    opacity 180ms ease;
+  font-weight: 500;
+  font-family: "Space Grotesk", sans-serif;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .primary-action:hover:not(:disabled) {
-  filter: brightness(1.08);
+  opacity: 0.9;
   transform: translateY(-1px);
 }
 
