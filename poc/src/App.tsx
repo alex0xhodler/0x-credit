@@ -318,7 +318,8 @@ function GearboxApp() {
           clearStoredOpenPosition(address, opportunity.strategyId)
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        console.error('Failed to fetch borrower credit accounts:', error)
         if (!cancelled) setIsCheckingPosition(false)
       })
 
@@ -476,10 +477,14 @@ function GearboxApp() {
       })
       setHasOpenPosition(true)
     } catch (error: unknown) {
+      console.error('Execution failed:', error)
       const message = formatTransactionError(error)
       const failedStep = nextSteps.find(step => step.status === 'active')?.id || 'account'
       setSteps(markStepError(nextSteps, failedStep, message))
       setExecutionError(message)
+      if (!message || message.length === 0) {
+        alert('An unknown error occurred during execution.')
+      }
     } finally {
       setIsExecuting(false)
     }

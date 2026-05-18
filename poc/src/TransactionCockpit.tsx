@@ -45,7 +45,7 @@ export interface TransactionCockpitProps {
 }
 
 const POWERED_BY_PARTNERS = [
-  { name: 'Gearbox', logo: '/powered-by/gearbox.png' },
+  { name: 'Gearbox', logo: 'https://docs.gearbox.finance/assets/brand/gearbox-icon.svg' },
   { name: 'KPK', logo: '/powered-by/kpk.svg' },
   { name: 'Beefy', logo: '/powered-by/beefy.svg' },
   { name: 'Edge UltraYield', logo: '/powered-by/edge-ultrayield.svg' },
@@ -222,9 +222,12 @@ export function TransactionCockpit({
   return (
     <main className={`shell ${positionOpen ? 'is-invested' : showExecution ? 'is-expanded' : 'is-landing'}`} ref={shellRef}>
       {!positionOpen && <section className={`opportunity-panel ${showExecution ? 'route-context' : ''}`} aria-label="0x.credit opportunities">
-        <div className="brand-row">
-          <span className="brand-mark" aria-hidden="true">0x</span>
-          <span>0x.credit</span>
+        <div className="brand-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <span className="brand-mark" aria-hidden="true">0x</span>
+            <span>0x.credit</span>
+          </div>
+          {showExecution && <w3m-button size="sm" />}
         </div>
 
         {showExecution ? (
