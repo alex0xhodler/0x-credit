@@ -197,24 +197,41 @@ function GearboxApp() {
   const opportunityViews = useMemo(() => {
     const views: OpportunityView[] = []
     if (opportunity) {
-      const sortedRoutes = [...opportunity.creditManagers]
-        .filter(route => route.maxDebt > 0n)
-        .sort((a, b) => {
-          if (a.maxDebt !== b.maxDebt) return a.maxDebt > b.maxDebt ? -1 : 1
-          return 0
-        })
+      const uniqueRoutes = new Map<string, typeof opportunity.creditManagers[0]>()
+      
+      for (const route of opportunity.creditManagers) {
+        if (route.maxDebt > 0n) {
+          const existing = uniqueRoutes.get(route.collateralToken)
+          if (!existing || route.maxDebt > existing.maxDebt) {
+            uniqueRoutes.set(route.collateralToken, route)
+          }
+        }
+      }
+
+      const sortedRoutes = Array.from(uniqueRoutes.values()).sort((a, b) => {
+        if (a.maxDebt !== b.maxDebt) return a.maxDebt > b.maxDebt ? -1 : 1
+        return 0
+      })
+
+      const seenSymbols = new Set<string>()
 
       sortedRoutes.forEach(route => {
+        let displaySymbol = route.collateralSymbol
+        if (displaySymbol === 'USDC' && seenSymbols.has('USDC')) {
+          displaySymbol = 'USDT0'
+        }
+        seenSymbols.add(displaySymbol)
+
         views.push({
           id: `monad-${route.address}`,
           strategyId: STRATEGY_ID,
           strategyName: opportunity.strategyName,
-          tokenSymbol: route.collateralSymbol,
+          tokenSymbol: displaySymbol,
           chainName: 'Monad',
           apyLabel: formatOpportunityApy(route.apy),
           leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
           protectionLabel: opportunity.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
-          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${route.collateralSymbol}`,
+          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
         })
       })
     } else {
