@@ -116,7 +116,7 @@ createAppKit({
   projectId,
   networks,
   metadata,
-  enableReconnect: false,
+  enableReconnect: true,
   themeMode: 'light',
   themeVariables: {
     '--w3m-accent': '#ff6b35',
@@ -196,6 +196,7 @@ function GearboxApp() {
   const [approvalTarget, setApprovalTarget] = useState<Address>()
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
   const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
+  const [isCheckingPosition, setIsCheckingPosition] = useState(false)
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
@@ -280,10 +281,18 @@ function GearboxApp() {
   useEffect(() => {
     let cancelled = false
 
-    if (!address || !opportunity || !selectedRoute) return
+    if (!address || !opportunity || !selectedRoute) {
+      setIsCheckingPosition(false)
+      return
+    }
 
     const key = `${openPositionStorageKey(address, opportunity.strategyId)}:${selectedRoute.address.toLowerCase()}`
-    if (checkedOpenPositionKeys.current.has(key)) return
+    if (checkedOpenPositionKeys.current.has(key)) {
+      setIsCheckingPosition(false)
+      return
+    }
+    
+    setIsCheckingPosition(true)
     checkedOpenPositionKeys.current.add(key)
 
     opportunity.sdk.accounts
@@ -299,6 +308,7 @@ function GearboxApp() {
         const stillOpen = Boolean(activeAccount)
         setHasOpenPosition(stillOpen)
         setActiveCreditAccount(activeAccount)
+        setIsCheckingPosition(false)
         if (stillOpen) {
           storeOpenPosition({
             address,
@@ -309,7 +319,9 @@ function GearboxApp() {
           clearStoredOpenPosition(address, opportunity.strategyId)
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) setIsCheckingPosition(false)
+      })
 
     return () => {
       cancelled = true
@@ -487,11 +499,20 @@ function GearboxApp() {
 
   useEffect(() => {
     if (!pendingStartAfterConnect || !isConnected || isExecuting || !selectedOpportunityIsExecutable) return
-    if (!opportunity || !selectedRoute || !amountRaw || routeWarning) return
+    if (!opportunity || !selectedRoute || !amountRaw || routeWarning || isCheckingPosition) return
+    
+    if (hasOpenPosition && !forceNewAccount) {
+      setPendingStartAfterConnect(false)
+      return
+    }
+
     void handleExecute()
   }, [
     amountRaw,
+    forceNewAccount,
     handleExecute,
+    hasOpenPosition,
+    isCheckingPosition,
     isConnected,
     isExecuting,
     opportunity,
