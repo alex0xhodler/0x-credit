@@ -116,6 +116,7 @@ createAppKit({
   projectId,
   networks,
   metadata,
+  enableReconnect: false,
   themeMode: 'light',
   themeVariables: {
     '--w3m-accent': '#111111',
