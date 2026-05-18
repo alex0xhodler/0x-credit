@@ -104,8 +104,9 @@ function clearStoredOpenPosition(address: Address, strategyId: string) {
   localStorage.removeItem(openPositionStorageKey(address, strategyId))
 }
 
-function creditAccountHasFunds(account: CreditAccountSnapshotLike, creditManager: Address): boolean {
-  if (account.creditManager.toLowerCase() !== creditManager.toLowerCase()) return false
+function creditAccountHasFunds(account: CreditAccountSnapshotLike, validCreditManagers: Address[]): boolean {
+  const isMatch = validCreditManagers.some(cm => cm.toLowerCase() === account.creditManager.toLowerCase())
+  if (!isMatch) return false
   if (account.debt > 0n) return true
   if ((account.totalValue ?? 0n) > 0n) return true
   return account.tokens?.some(token => token.balance > 0n) ?? false
@@ -280,12 +281,12 @@ function GearboxApp() {
   useEffect(() => {
     let cancelled = false
 
-    if (!address || !opportunity || !selectedRoute) {
+    if (!address || !opportunity) {
       setIsCheckingPosition(false)
       return
     }
 
-    const key = `${openPositionStorageKey(address, opportunity.strategyId)}:${selectedRoute.address.toLowerCase()}`
+    const key = `${openPositionStorageKey(address, opportunity.strategyId)}:all`
     if (checkedOpenPositionKeys.current.has(key)) {
       setIsCheckingPosition(false)
       return
@@ -294,24 +295,32 @@ function GearboxApp() {
     setIsCheckingPosition(true)
     checkedOpenPositionKeys.current.add(key)
 
-    opportunity.sdk.accounts
-      .getBorrowerCreditAccounts(address, {
-        creditManager: selectedRoute.address,
+    const validCreditManagers = opportunity.creditManagers.map(cm => cm.address)
+    const fetches = validCreditManagers.map(cm => 
+      opportunity.sdk.accounts.getBorrowerCreditAccounts(address, {
+        creditManager: cm,
         includeZeroDebt: false,
+      }).catch(error => {
+        console.warn(`Failed to fetch accounts for CM ${cm}:`, error)
+        return []
       })
-      .then(accounts => {
+    )
+
+    Promise.all(fetches)
+      .then(results => {
         if (cancelled) return
-        const activeAccount = (accounts as CreditAccountSnapshotLike[]).find(account =>
-          creditAccountHasFunds(account, selectedRoute.address),
+        const allAccounts = results.flat() as CreditAccountSnapshotLike[]
+        const activeAccount = allAccounts.find(account =>
+          creditAccountHasFunds(account, validCreditManagers),
         )
         const stillOpen = Boolean(activeAccount)
         setHasOpenPosition(stillOpen)
         setActiveCreditAccount(activeAccount)
         setIsCheckingPosition(false)
-        if (stillOpen) {
+        if (stillOpen && activeAccount) {
           storeOpenPosition({
             address,
-            creditManager: selectedRoute.address,
+            creditManager: activeAccount.creditManager,
             strategyId: opportunity.strategyId,
           })
         } else {
@@ -319,14 +328,14 @@ function GearboxApp() {
         }
       })
       .catch((error) => {
-        console.error('Failed to fetch borrower credit accounts:', error)
+        console.error('Unexpected error fetching borrower credit accounts:', error)
         if (!cancelled) setIsCheckingPosition(false)
       })
 
     return () => {
       cancelled = true
     }
-  }, [address, opportunity, selectedRoute])
+  }, [address, opportunity])
 
   const allowance = useReadContract({
     address: opportunity?.collateralToken,
