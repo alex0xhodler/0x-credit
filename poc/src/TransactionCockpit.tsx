@@ -383,29 +383,16 @@ export function TransactionCockpit({
             </div>
             <h2>Smart account earning</h2>
             
-            {activePositionStats ? (
-              <div className="stats-grid">
-                <div className="stat-item">
-                  <span className="value-label">Total Value</span>
-                  <strong>{formatPositionValue(activePositionStats.totalValue, opportunity.tokenSymbol)}</strong>
-                </div>
-                <div className="stat-item">
-                  <span className="value-label">Debt</span>
-                  <strong>{formatPositionValue(activePositionStats.debt, opportunity.tokenSymbol)}</strong>
-                </div>
-                <div className="stat-item">
-                  <span className="value-label">Net Value</span>
-                  <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
-                </div>
-              </div>
-            ) : (
-              <>
-                <span className="value-label">Smart account value</span>
-                <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
-              </>
-            )}
+            <span className="value-label">Smart account value</span>
+            <strong>{formatPositionValue(simulatedPositionValue, opportunity.tokenSymbol)}</strong>
 
             <div className="live-stats" aria-label="Position summary">
+              {activePositionStats && (
+                <>
+                  <span>Total value <strong>{formatPositionValue(activePositionStats.totalValue, opportunity.tokenSymbol)}</strong></span>
+                  <span>Debt <strong>{formatPositionValue(activePositionStats.debt, opportunity.tokenSymbol)}</strong></span>
+                </>
+              )}
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
               {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
             </div>
