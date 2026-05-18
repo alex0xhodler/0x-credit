@@ -501,28 +501,25 @@ button {
   color: color-mix(in srgb, var(--ethereum) 76%, var(--ink));
 }
 
-.opportunity-card.monad:has(.opportunity-card-main:hover:not(:disabled)),
-.opportunity-card.monad.selected {
-  border-color: color-mix(in srgb, var(--monad) 62%, var(--acid));
-}
-
-.opportunity-card.ethereum:has(.opportunity-card-main:hover:not(:disabled)),
-.opportunity-card.ethereum.selected {
-  border-color: color-mix(in srgb, var(--ethereum) 62%, var(--acid));
+.opportunity-card:has(.opportunity-card-main:hover:not(:disabled)),
+.opportunity-card.selected {
+  border-color: var(--ink);
 }
 
 .apy-pill {
   position: absolute;
-  right: 18px;
+  right: 24px;
   top: 50%;
   transform: translateY(-50%);
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 107, 53, 0.15);
-  border-radius: var(--button-radius);
-  background: rgba(255, 107, 53, 0.08);
-  color: color-mix(in srgb, var(--acid) 80%, var(--ink));
-  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
-  font-weight: 850;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--primary);
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.2px;
   line-height: 1;
   white-space: nowrap;
 }
@@ -549,11 +546,12 @@ button {
   min-height: 16px;
   align-items: center;
   padding: 0 0 1px;
-  border-bottom: 1px solid color-mix(in srgb, var(--acid) 52%, var(--ink-soft));
+  border-bottom: 1px solid var(--ink);
   background: transparent;
-  color: inherit;
-  font-size: 0.76rem;
-  font-weight: 900;
+  color: var(--ink);
+  font-family: "Arial", "Helvetica", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
