@@ -33,6 +33,8 @@ export interface TransactionCockpitProps {
   onExecute(): void
   onSelectOpportunity?(opportunity: OpportunityView): void
   onResetFlow?(): void
+  hasStoredPosition?: boolean
+  onViewPosition?(): void
 }
 
 const POWERED_BY_PARTNERS = [
@@ -159,6 +161,8 @@ export function TransactionCockpit({
   onExecute,
   onSelectOpportunity,
   onResetFlow,
+  hasStoredPosition,
+  onViewPosition,
 }: TransactionCockpitProps) {
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
@@ -233,6 +237,11 @@ export function TransactionCockpit({
           <div className="headline-grid">
             <h1 className="hero-line">Earn amplified yields on auto-pilot</h1>
             <p>Pick a Strategy, open your Smart account, start earning Effortlessly</p>
+            {hasStoredPosition && !positionOpen && onViewPosition && (
+              <button type="button" className="view-position-link" onClick={onViewPosition}>
+                View your active Smart account →
+              </button>
+            )}
           </div>
         )}
 

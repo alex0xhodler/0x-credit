@@ -198,6 +198,7 @@ function GearboxApp() {
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [pendingStartAfterConnect, setPendingStartAfterConnect] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
+  const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   const selectedOpportunityIsExecutable = selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID
 
@@ -516,7 +517,9 @@ function GearboxApp() {
       isProjectReady={isReownProjectConfigured}
       opportunity={displayedOpportunity}
       opportunities={opportunityViews}
-      manageUrl={hasOpenPosition && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      manageUrl={hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      hasStoredPosition={hasOpenPosition}
+      onViewPosition={() => setForceNewAccount(false)}
       routeWarning={displayedRouteWarning}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
@@ -537,7 +540,10 @@ function GearboxApp() {
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
         if (nextOpportunity.id === MONAD_USDC_OPPORTUNITY_ID && !amount) setAmount('1000')
       }}
-      onResetFlow={() => setHasStartedFlow(false)}
+      onResetFlow={() => {
+        setHasStartedFlow(false)
+        setForceNewAccount(true)
+      }}
     />
   )
 }

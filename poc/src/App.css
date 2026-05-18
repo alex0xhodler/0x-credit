@@ -968,6 +968,27 @@ button {
   text-decoration-color: currentColor;
 }
 
+.view-position-link {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  transition: text-decoration-color 150ms ease;
+}
+
+.view-position-link:hover {
+  text-decoration-color: currentColor;
+}
+
 .step-list {
   display: grid;
   gap: 8px;
