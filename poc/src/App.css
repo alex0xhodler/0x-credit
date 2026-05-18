@@ -4,7 +4,7 @@
   --muted: rgb(100, 100, 100);
   --paper: #FFFFFF;
   --paper-raised: #FFFFFF;
-  --canvas: #FFFFFF;
+  --canvas: #f2f2f3;
   --line: rgba(0, 0, 0, 0.1);
   --line-strong: rgba(0, 0, 0, 0.2);
   --moss: #000000;
@@ -16,16 +16,16 @@
   --monad: #6E54FF;
   --ethereum: #2457ff;
   --card-border: rgba(0, 0, 0, 0.1);
-  --card-shadow: 0px 1px 3px 0px rgba(0, 0, 0, 0.1);
-  --surface-radius: 8px;
-  --button-radius: 6px;
+  --card-shadow: 0 1px 1px #0000001a;
+  --surface-radius: 24px;
+  --button-radius: 999px;
   --small-radius: 4px;
 
   color: var(--ink);
   background: var(--canvas);
   font-family:
-    "Arial",
-    "Helvetica",
+    "Inter",
+    system-ui,
     sans-serif;
   font-synthesis: none;
   line-height: 1.5;
@@ -54,16 +54,37 @@ body::after {
 }
 
 h1, .hero-line {
-  font-family: "Space Grotesk", sans-serif;
-  font-size: 72px;
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 56px;
   line-height: 72px;
   letter-spacing: -2.16px;
-  font-weight: 500;
+  font-weight: 600;
   margin: 0;
+  font-feature-settings: normal;
+  font-kerning: auto;
+  font-language-override: normal;
+  font-optical-sizing: auto;
+  font-palette: normal;
+  font-size-adjust: none;
+  font-stretch: 100%;
+  font-style: normal;
+  font-synthesis-position: auto;
+  font-synthesis-small-caps: auto;
+  font-synthesis-style: auto;
+  font-synthesis-weight: auto;
+  font-variant-alternates: normal;
+  font-variant-caps: normal;
+  font-variant-east-asian: normal;
+  font-variant-emoji: normal;
+  font-variant-ligatures: normal;
+  font-variant-numeric: normal;
+  font-variant-position: normal;
+  font-variation-settings: normal;
+  -moz-osx-font-smoothing: auto;
 }
 
 h2 {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 24px;
   line-height: 32px;
   letter-spacing: -0.72px;
@@ -72,7 +93,7 @@ h2 {
 }
 
 h3 {
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 20px;
   line-height: 30px;
   letter-spacing: -0.2px;
@@ -81,7 +102,7 @@ h3 {
 }
 
 p, .body-text {
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   line-height: 21px;
   letter-spacing: -0.13px;
@@ -130,7 +151,7 @@ button {
   display: grid;
   gap: clamp(24px, 4vw, 40px);
   padding: clamp(26px, 5vw, 54px);
-  overflow: hidden;
+  overflow: visible;
   animation: surface-arrive 640ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -172,7 +193,7 @@ button {
 .brand-row {
   gap: 12px;
   color: var(--ink);
-  font-family: "League Gothic", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 1.5rem;
   letter-spacing: 1px;
 }
@@ -245,7 +266,7 @@ button {
 
 .route-masthead > strong {
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: clamp(24px, 3vw, 32px);
   font-weight: 500;
   letter-spacing: -0.72px;
@@ -255,7 +276,7 @@ button {
 .route-masthead p {
   margin: 0;
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.2px;
@@ -278,12 +299,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 330px;
-  overflow-y: auto;
   padding-bottom: 24px;
-  scrollbar-width: none;
-  mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 85%, transparent 100%);
 }
 
 .opportunity-list::-webkit-scrollbar {
@@ -367,10 +383,8 @@ button {
 
 .opportunity-card:has(.opportunity-card-main:hover:not(:disabled)),
 .opportunity-card.selected {
-  border-color: rgba(255, 107, 53, 0.72);
-  box-shadow:
-    0 18px 48px rgba(33, 21, 41, 0.2),
-    inset 0 0 0 1px rgba(33, 21, 41, 0.04);
+  border-color: var(--ink);
+  box-shadow: var(--card-shadow);
   transform: translateY(-1px);
 }
 
@@ -446,7 +460,7 @@ button {
 
 .token-icon.usdc text {
   fill: #fffdf4;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 900;
   text-anchor: middle;
@@ -511,11 +525,6 @@ button {
   color: color-mix(in srgb, var(--ethereum) 76%, var(--ink));
 }
 
-.opportunity-card:has(.opportunity-card-main:hover:not(:disabled)),
-.opportunity-card.selected {
-  border-color: var(--ink);
-}
-
 .apy-pill {
   position: absolute;
   right: 24px;
@@ -526,7 +535,7 @@ button {
   border-radius: 0;
   background: transparent;
   color: var(--primary);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 20px;
   font-weight: 500;
   letter-spacing: -0.2px;
@@ -559,7 +568,7 @@ button {
   border-bottom: 1px solid var(--ink);
   background: transparent;
   color: var(--ink);
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0;
@@ -618,7 +627,7 @@ button {
 .route-context-note span,
 .position-explained h3 {
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 500;
   letter-spacing: -0.2px;
@@ -654,7 +663,7 @@ button {
   border: none;
   border-radius: 0;
   color: var(--ink-soft);
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 400;
   letter-spacing: -0.13px;
@@ -673,7 +682,7 @@ button {
   border-radius: 0;
   background: transparent;
   color: var(--ink-soft);
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 400;
   letter-spacing: -0.13px;
@@ -711,7 +720,7 @@ button {
 
 .flow-heading span {
   color: var(--primary);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0;
@@ -721,7 +730,7 @@ button {
 .flow-heading h2 {
   margin: 0;
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: clamp(32px, 5vw, 48px);
   line-height: 1.1;
   letter-spacing: -1px;
@@ -742,7 +751,7 @@ button {
 .journey-summary span,
 .position-live .value-label {
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 500;
   letter-spacing: 0;
@@ -759,7 +768,7 @@ button {
   outline: none;
   background: #FFFFFF;
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: clamp(1.25rem, 3vw, 1.8rem);
   font-weight: 500;
 }
@@ -781,8 +790,8 @@ button {
   color: #FFFFFF;
   cursor: pointer;
   font-size: 16px;
-  font-weight: 500;
-  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-family: "Manrope", system-ui, sans-serif;
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
@@ -825,7 +834,7 @@ button {
 
 .journey-summary strong {
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 24px;
   font-weight: 500;
   letter-spacing: -0.72px;
@@ -871,7 +880,7 @@ button {
   justify-content: space-between;
   gap: 12px;
   color: var(--ink-soft);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 500;
   text-transform: uppercase;
@@ -886,7 +895,7 @@ button {
   max-width: 12ch;
   margin: 0;
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: clamp(48px, 8vw, 72px);
   font-weight: 500;
   letter-spacing: -2.16px;
@@ -895,7 +904,7 @@ button {
 
 .position-live > strong {
   color: var(--ink);
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: clamp(32px, 6vw, 48px);
   font-weight: 500;
   letter-spacing: -1px;
@@ -914,7 +923,7 @@ button {
   border: none;
   background: transparent;
   color: var(--ink-soft);
-  font-family: "Arial", "Helvetica", sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 14px;
   font-weight: 400;
   letter-spacing: -0.13px;
@@ -947,7 +956,7 @@ button {
   border-radius: var(--button-radius);
   background: var(--ink);
   color: #FFFFFF;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 500;
   text-decoration: none;
@@ -966,7 +975,7 @@ button {
   background: transparent;
   border: none;
   padding: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
@@ -987,7 +996,7 @@ button {
   background: transparent;
   border: none;
   padding: 0;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Manrope", system-ui, sans-serif;
   font-size: 16px;
   font-weight: 500;
   cursor: pointer;
