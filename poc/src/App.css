@@ -338,9 +338,8 @@ button {
   grid-template-columns: minmax(0, 1fr) max-content;
   gap: 14px;
   width: 100%;
-  min-height: 46px;
   padding: 0;
-  align-items: start;
+  align-items: center;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -456,13 +455,13 @@ button {
 .apy-pill {
   align-self: center;
   justify-self: end;
-  padding: 6px 9px;
-  border: 1px solid rgba(255, 107, 53, 0.24);
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 107, 53, 0.15);
   border-radius: var(--button-radius);
-  background: rgba(255, 107, 53, 0.14);
-  color: color-mix(in srgb, var(--acid) 62%, var(--ink));
-  font-size: clamp(0.96rem, 1.42vw, 1.06rem);
-  font-weight: 950;
+  background: rgba(255, 107, 53, 0.08);
+  color: color-mix(in srgb, var(--acid) 80%, var(--ink));
+  font-size: clamp(0.9rem, 1.2vw, 1rem);
+  font-weight: 850;
   line-height: 1;
   white-space: nowrap;
 }
@@ -475,13 +474,13 @@ button {
 }
 
 .route-details {
-  position: absolute;
-  left: 62px;
-  bottom: 18px;
+  margin-top: 4px;
+  margin-left: 44px; /* Align with text after the 32px icon + 12px gap */
   width: max-content;
   color: var(--ink-soft);
-  font-size: 0.76rem;
+  font-size: 0.85rem;
   font-weight: 850;
+  position: relative;
 }
 
 .route-details button {
