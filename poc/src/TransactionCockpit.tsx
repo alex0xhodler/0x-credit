@@ -106,21 +106,12 @@ function chainTone(chainName: string): string {
 function TokenIcon({ symbol }: { symbol: string }) {
   if (symbol.toUpperCase().includes('ETH')) {
     return (
-      <svg aria-hidden="true" className="token-icon eth" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r="15" />
-        <path d="M16 4.8 8.4 16.3 16 20.8l7.6-4.5L16 4.8Z" />
-        <path d="M8.4 17.8 16 27.2l7.6-9.4-7.6 4.5-7.6-4.5Z" />
-        <path d="m16 12.6-7.6 3.7 7.6 4.5 7.6-4.5-7.6-3.7Z" />
-      </svg>
+      <img aria-hidden="true" className="token-icon eth" src="https://cryptoicon.io/wp-content/uploads/cc-assets/SVG/Dark/ETH.svg" alt="" />
     )
   }
 
   return (
-    <svg aria-hidden="true" className="token-icon usdc" viewBox="0 0 32 32">
-      <circle cx="16" cy="16" r="15" />
-      <path d="M9.8 9.4a9.6 9.6 0 0 0 0 13.2M22.2 9.4a9.6 9.6 0 0 1 0 13.2" />
-      <text x="16" y="20.3">$</text>
-    </svg>
+    <img aria-hidden="true" className="token-icon usdc" src="https://cryptoicon.io/wp-content/uploads/cc-assets/SVG/Color/USDC.svg" alt="" />
   )
 }
 
