@@ -503,6 +503,7 @@ function GearboxApp() {
     
     if (hasOpenPosition && !forceNewAccount) {
       setPendingStartAfterConnect(false)
+      setHasStartedFlow(false)
       return
     }
 
@@ -553,9 +554,12 @@ function GearboxApp() {
       isProjectReady={isReownProjectConfigured}
       opportunity={displayedOpportunity}
       opportunities={opportunityViews}
-      manageUrl={hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
+      manageUrl={hasStartedFlow && hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable ? GEARBOX_DASHBOARD_URL : undefined}
       hasStoredPosition={hasOpenPosition}
-      onViewPosition={() => setForceNewAccount(false)}
+      onViewPosition={() => {
+        setForceNewAccount(false)
+        setHasStartedFlow(true)
+      }}
       routeWarning={displayedRouteWarning}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
@@ -579,6 +583,7 @@ function GearboxApp() {
       onResetFlow={() => {
         setHasStartedFlow(false)
         setForceNewAccount(true)
+        setExecutionError(undefined)
       }}
     />
   )
