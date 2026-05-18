@@ -198,7 +198,6 @@ function GearboxApp() {
   const [approvalTarget, setApprovalTarget] = useState<Address>()
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
   const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
-  const [isCheckingPosition, setIsCheckingPosition] = useState(false)
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
   const [selectedOpportunityId, setSelectedOpportunityId] = useState(MONAD_USDC_OPPORTUNITY_ID)
   const [forceNewAccount, setForceNewAccount] = useState(false)
@@ -283,17 +282,14 @@ function GearboxApp() {
     let cancelled = false
 
     if (!address || !opportunity) {
-      setIsCheckingPosition(false)
       return
     }
 
     const key = `${openPositionStorageKey(address, opportunity.strategyId)}:all`
     if (checkedOpenPositionKeys.current.has(key)) {
-      setIsCheckingPosition(false)
       return
     }
     
-    setIsCheckingPosition(true)
     checkedOpenPositionKeys.current.add(key)
 
     const validCreditManagers = opportunity.creditManagers.map(cm => cm.address)
@@ -317,7 +313,6 @@ function GearboxApp() {
         const stillOpen = Boolean(activeAccount)
         setHasOpenPosition(stillOpen)
         setActiveCreditAccount(activeAccount)
-        setIsCheckingPosition(false)
         if (stillOpen && activeAccount) {
           storeOpenPosition({
             address,
@@ -330,7 +325,6 @@ function GearboxApp() {
       })
       .catch((error) => {
         console.error('Unexpected error fetching borrower credit accounts:', error)
-        if (!cancelled) setIsCheckingPosition(false)
       })
 
     return () => {
