@@ -178,7 +178,7 @@ function GearboxApp() {
     },
   })
 
-  const [amount, setAmount] = useState('1000')
+  const [amount, setAmount] = useState('1500')
   const [opportunity, setOpportunity] = useState<LoadedGearboxOpportunity>()
   const [loadError, setLoadError] = useState<string>()
   const [executionError, setExecutionError] = useState<string>()
@@ -613,7 +613,7 @@ function GearboxApp() {
         setHasStartedFlow(true)
         setForceNewAccount(true)
         if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
-        if (nextOpportunity.id.startsWith('monad-') && !amount) setAmount('1000')
+        if (nextOpportunity.id.startsWith('monad-') && !amount) setAmount('1500')
       }}
       onResetFlow={() => {
         setHasStartedFlow(false)
