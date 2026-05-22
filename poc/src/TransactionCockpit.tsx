@@ -184,7 +184,8 @@ export function TransactionCockpit({
   const canUseOpportunity = opportunity.isExecutable !== false
   const canExecute = isConnected && isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
   const canStart = isProjectReady && canUseOpportunity && Number(amount) > 0 && !isBusy && !positionOpen && !routeWarning
-  const annualYield = estimateAnnualYield(activePositionStats ? String(activePositionStats.netValue) : amount, opportunity.apyLabel, opportunity.tokenSymbol)
+  const depositAnnualYield = estimateAnnualYield(amount, opportunity.apyLabel, opportunity.tokenSymbol)
+  const positionAnnualYield = estimateAnnualYield(activePositionStats ? String(activePositionStats.netValue) : amount, opportunity.apyLabel, opportunity.tokenSymbol)
   const parsedAmount = Number(amount)
   const displayAmount = Number.isFinite(parsedAmount) ? parsedAmount.toLocaleString() : amount
   const leverageMultiplier = parseLeverageMultiplier(opportunity.leverageLabel)
@@ -385,10 +386,10 @@ export function TransactionCockpit({
               />
             </label>
 
-            {annualYield && (
+            {depositAnnualYield && (
               <section className="journey-summary" aria-label="Earning summary">
-                <span>Est. yield</span>
-                <strong>{annualYield}</strong>
+                <span>Estimated Yield</span>
+                <strong>{depositAnnualYield}</strong>
               </section>
             )}
           </div>
@@ -417,7 +418,7 @@ export function TransactionCockpit({
                 </>
               )}
               <span>Strategy APY <strong>{opportunity.apyLabel.replace('Current APY ', '').replace(' APY', '')}</strong></span>
-              {annualYield && <span>Annual pace <strong>{annualYield}</strong></span>}
+              {positionAnnualYield && <span>Annual pace <strong>{positionAnnualYield}</strong></span>}
             </div>
             <div className="position-actions">
               <a className="manage-link" href={manageUrl} rel="noreferrer" target="_blank">
