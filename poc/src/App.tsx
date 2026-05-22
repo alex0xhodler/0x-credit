@@ -363,11 +363,6 @@ function GearboxApp() {
       return
     }
 
-    if (!opportunity.sdk) {
-      setApprovalTarget(selectedRoute.address)
-      return
-    }
-
     opportunity.sdk.accounts
       .getApprovalAddress({
         creditManager: selectedRoute.address,
@@ -398,12 +393,6 @@ function GearboxApp() {
     }
     
     checkedOpenPositionKeys.current.add(key)
-
-    if (!opportunity.sdk) {
-      // Mock for unavailable SDK
-      setHasOpenPosition(hasStoredOpenPosition(address, opportunity.strategyId))
-      return
-    }
 
     const validCreditManagers = opportunity.creditManagers.map(cm => cm.address)
     const fetches = validCreditManagers.map(cm => 

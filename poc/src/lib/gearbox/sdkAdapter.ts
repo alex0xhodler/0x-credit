@@ -127,20 +127,7 @@ export async function prepareOpenStrategyTx({
   const plan = calculateLoopPlan({ collateralAmount, leverage, quotaReserveBps })
 
   if (!sdk) {
-    // Return a mocked transaction when SDK is not available
-    return {
-      approvalTarget: creditManager,
-      debt: plan.debt,
-      quota: plan.quota,
-      totalOnAccount: plan.totalOnAccount,
-      rawTx: {
-        to: creditManager,
-        callData: '0x00000000', // Mock empty call
-        value: '0',
-      },
-      routerAmount: collateralAmount,
-      routerMinAmount: collateralAmount,
-    }
+    throw new Error('Gearbox SDK is not available.')
   }
 
   const narrowedSdk = sdk as GearboxSdkNarrowed

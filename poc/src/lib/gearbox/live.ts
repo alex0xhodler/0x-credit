@@ -20,7 +20,7 @@ export const TARGET_HEALTH_FACTOR_BPS = 10_300n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
 export const DEFAULT_GEARBOX_APY_URL = '/gearbox-apy/latest.json'
 export const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || 'https://rpc.monad.xyz'
-export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://eth.llamarpc.com'
+export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
 export const MAINNET_STRATEGY_ID = 'wmooCurveETH+-WETH'
 export const GEARBOX_APY_URL = resolveGearboxApyUrl(import.meta.env.VITE_GEARBOX_APY_URL)
 
@@ -127,45 +127,7 @@ export function loadGearboxOpportunity(options?: LoadOpportunityOptions): Promis
   const key = `${finalOptions.chainId}-${finalOptions.strategyId}`
   let cached = cachedOpportunities.get(key)
   if (!cached) {
-    cached = createGearboxOpportunity(finalOptions).catch((error) => {
-      console.warn(`Failed to create opportunity for ${key}, using dummy fallback:`, error)
-      const isMainnet = finalOptions.chainId === MAINNET_CHAIN_ID
-      const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as Address
-      const dummyCm = '0x32bE07FB9dBf294c2e92715F562f7aBA02b7443A' as Address // Dummy CM
-      return {
-        sdk: null as any,
-        strategyId: finalOptions.strategyId,
-        strategyName: isMainnet ? 'WMoo Curve ETH+-WETH' : 'Unknown Strategy',
-        targetToken: wethAddress,
-        creditManager: dummyCm,
-        collateralToken: wethAddress,
-        collateralSymbol: isMainnet ? 'WETH' : 'USDC',
-        collateralDecimals: 18,
-        chainName: finalOptions.chainName,
-        maxApy: 14.08,
-        apyLabel: 'Current APY 14.08%',
-        maxLeverage: 760n,
-        minimumDepositAmount: 1500000000000000000n, // 1.5 WETH
-        leverageLabel: '7.60x target',
-        botAddress: undefined,
-        creditManagers: [
-          {
-            address: dummyCm,
-            apy: 14.08,
-            maxLeverage: 760n,
-            minimumDepositAmount: 1500000000000000000n,
-            minDebt: 0n,
-            maxDebt: 100000000000000000000n,
-            availableToBorrow: 100000000000000000000n,
-            baseBorrowRate: 0,
-            baseQuotaRateWithFee: 0n,
-            collateralToken: wethAddress,
-            collateralSymbol: 'WETH',
-            collateralDecimals: 18,
-          }
-        ]
-      }
-    })
+    cached = createGearboxOpportunity(finalOptions)
     cachedOpportunities.set(key, cached)
   }
   return cached
