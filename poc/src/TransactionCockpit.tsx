@@ -353,9 +353,11 @@ export function TransactionCockpit({
       </section>}
 
       {showExecution && <section className="execution-panel" aria-label="0x.credit route">
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
-          <w3m-button size="sm" />
-        </div>
+        {positionOpen && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <w3m-button size="sm" />
+          </div>
+        )}
 
         {!isProjectReady && (
           <p className="alert">Set VITE_REOWN_PROJECT_ID to enable wallet connections.</p>
