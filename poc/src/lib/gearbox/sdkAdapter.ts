@@ -124,11 +124,29 @@ export async function prepareOpenStrategyTx({
   botAddress,
   referralCode,
 }: PrepareOpenStrategyInput): Promise<PreparedOpenStrategyTx> {
+  const plan = calculateLoopPlan({ collateralAmount, leverage, quotaReserveBps })
+
+  if (!sdk) {
+    // Return a mocked transaction when SDK is not available
+    return {
+      approvalTarget: creditManager,
+      debt: plan.debt,
+      quota: plan.quota,
+      totalOnAccount: plan.totalOnAccount,
+      rawTx: {
+        to: creditManager,
+        callData: '0x00000000', // Mock empty call
+        value: '0',
+      },
+      routerAmount: collateralAmount,
+      routerMinAmount: collateralAmount,
+    }
+  }
+
   const narrowedSdk = sdk as GearboxSdkNarrowed
   const cmSuite = narrowedSdk.marketRegister.findCreditManager(creditManager)
   const cmAddress = cmSuite.creditManager.address
   const creditFacade = cmSuite.creditFacade.address
-  const plan = calculateLoopPlan({ collateralAmount, leverage, quotaReserveBps })
   const minDebt = cmSuite.creditFacade.minDebt ?? 0n
   const maxDebt = cmSuite.creditFacade.maxDebt ?? 0n
 

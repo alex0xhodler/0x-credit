@@ -46,6 +46,9 @@ import {
   loadGearboxOpportunity,
   MONAD_CHAIN_ID,
   STRATEGY_ID,
+  MAINNET_CHAIN_ID,
+  MAINNET_RPC_URL,
+  MAINNET_STRATEGY_ID,
   type LoadedGearboxOpportunity,
 } from './lib/gearbox/live'
 import { prepareOpenStrategyTx } from './lib/gearbox/sdkAdapter'
@@ -66,8 +69,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   leverageLabel: '7.60x target',
   protectionLabel: 'Mainnet strategy',
   minDepositLabel: 'Min deposit: 1.5 WETH',
-  isExecutable: false,
-  disabledReason: 'Ethereum execution is not wired in this PoC yet.',
+  isExecutable: true,
 }
 
 interface StoredOpenPosition {
@@ -179,7 +181,8 @@ function GearboxApp() {
   })
 
   const [amount, setAmount] = useState('1500')
-  const [opportunity, setOpportunity] = useState<LoadedGearboxOpportunity>()
+  const [monadOpportunity, setMonadOpportunity] = useState<LoadedGearboxOpportunity>()
+  const [mainnetOpportunity, setMainnetOpportunity] = useState<LoadedGearboxOpportunity>()
   const [loadError, setLoadError] = useState<string>()
   const [executionError, setExecutionError] = useState<string>()
   const [isExecuting, setIsExecuting] = useState(false)
@@ -192,14 +195,17 @@ function GearboxApp() {
   const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   
-  const selectedOpportunityIsExecutable = selectedOpportunityId !== MAINNET_WETH_OPPORTUNITY_ID
+  const selectedOpportunityIsExecutable = true
+  const opportunity = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID || selectedOpportunityId.startsWith('mainnet-') ? mainnetOpportunity : monadOpportunity
 
   const opportunityViews = useMemo(() => {
     const views: OpportunityView[] = []
-    if (opportunity) {
-      const uniqueRoutes = new Map<string, typeof opportunity.creditManagers[0]>()
+    
+    // Monad Routes
+    if (monadOpportunity) {
+      const uniqueRoutes = new Map<string, typeof monadOpportunity.creditManagers[0]>()
       
-      for (const route of opportunity.creditManagers) {
+      for (const route of monadOpportunity.creditManagers) {
         if (route.maxDebt > 0n) {
           const existing = uniqueRoutes.get(route.collateralToken)
           if (!existing || route.maxDebt > existing.maxDebt) {
@@ -225,40 +231,72 @@ function GearboxApp() {
         views.push({
           id: `monad-${route.address}`,
           strategyId: STRATEGY_ID,
-          strategyName: opportunity.strategyName,
+          strategyName: monadOpportunity.strategyName,
           tokenSymbol: displaySymbol,
           chainName: 'Monad',
           apyLabel: formatOpportunityApy(route.apy),
           leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
-          protectionLabel: opportunity.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
+          protectionLabel: monadOpportunity.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
           minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
         })
       })
     } else {
       views.push(baseOpportunityView(undefined, undefined))
     }
-    views.push(MAINNET_WETH_OPPORTUNITY)
+    
+    // Mainnet Routes
+    if (mainnetOpportunity) {
+      mainnetOpportunity.creditManagers.forEach(route => {
+        views.push({
+          id: `mainnet-${route.address}`,
+          strategyId: MAINNET_STRATEGY_ID,
+          strategyName: mainnetOpportunity.strategyName,
+          tokenSymbol: route.collateralSymbol,
+          chainName: 'Ethereum',
+          apyLabel: formatOpportunityApy(route.apy),
+          leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
+          protectionLabel: mainnetOpportunity.botAddress ? 'Mainnet strategy' : 'Mainnet strategy',
+          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${route.collateralSymbol}`,
+          isExecutable: true,
+        })
+      })
+    } else {
+      views.push(MAINNET_WETH_OPPORTUNITY)
+    }
+    
     return views
-  }, [opportunity])
+  }, [monadOpportunity, mainnetOpportunity])
 
   useEffect(() => {
-    if (opportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
+    if (monadOpportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
       const firstMonad = opportunityViews.find(v => v.id.startsWith('monad-'))
       if (firstMonad) {
         setSelectedOpportunityId(firstMonad.id)
       }
+    } else if (mainnetOpportunity && selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID) {
+      const firstMainnet = opportunityViews.find(v => v.id.startsWith('mainnet-'))
+      if (firstMainnet) {
+        setSelectedOpportunityId(firstMainnet.id)
+      }
     }
-  }, [opportunity, opportunityViews, selectedOpportunityId])
+  }, [monadOpportunity, mainnetOpportunity, opportunityViews, selectedOpportunityId])
 
   const displayedOpportunity = useMemo(() => {
     return opportunityViews.find(v => v.id === selectedOpportunityId) || opportunityViews[0]
   }, [opportunityViews, selectedOpportunityId])
 
   const selectedRoute = useMemo(() => {
-    if (!opportunity || !selectedOpportunityId || !selectedOpportunityId.startsWith('monad-')) return undefined
-    const routeAddress = selectedOpportunityId.replace('monad-', '')
-    return opportunity.creditManagers.find(cm => cm.address === routeAddress)
-  }, [opportunity, selectedOpportunityId])
+    if (!opportunity || !selectedOpportunityId) return undefined
+    if (selectedOpportunityId.startsWith('monad-')) {
+      const routeAddress = selectedOpportunityId.replace('monad-', '')
+      return monadOpportunity?.creditManagers.find(cm => cm.address === routeAddress)
+    }
+    if (selectedOpportunityId.startsWith('mainnet-')) {
+      const routeAddress = selectedOpportunityId.replace('mainnet-', '')
+      return mainnetOpportunity?.creditManagers.find(cm => cm.address === routeAddress)
+    }
+    return undefined
+  }, [monadOpportunity, mainnetOpportunity, opportunity, selectedOpportunityId])
 
   const amountRaw = useMemo(
     () => parseTokenAmount(amount, selectedRoute?.collateralDecimals || opportunity?.collateralDecimals || 6),
@@ -280,8 +318,9 @@ function GearboxApp() {
   }, [amountRaw, opportunity, selectedRoute])
 
   useEffect(() => {
-    setHasOpenPosition(hasStoredOpenPosition(address, STRATEGY_ID))
-  }, [address])
+    if (!opportunity) return
+    setHasOpenPosition(hasStoredOpenPosition(address, opportunity.strategyId))
+  }, [address, opportunity])
 
   useEffect(() => {
     let cancelled = false
@@ -289,12 +328,26 @@ function GearboxApp() {
     loadGearboxOpportunity()
       .then(nextOpportunity => {
         if (cancelled) return
-        setOpportunity(nextOpportunity)
+        setMonadOpportunity(nextOpportunity)
         setLoadError(undefined)
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        setLoadError(error instanceof Error ? error.message : 'Failed to load this opportunity.')
+        setLoadError(error instanceof Error ? error.message : 'Failed to load Monad opportunity.')
+      })
+
+    loadGearboxOpportunity({
+      chainId: MAINNET_CHAIN_ID,
+      chainName: 'Mainnet',
+      rpcUrl: MAINNET_RPC_URL,
+      strategyId: MAINNET_STRATEGY_ID,
+    })
+      .then(nextOpportunity => {
+        if (cancelled) return
+        setMainnetOpportunity(nextOpportunity)
+      })
+      .catch((error: unknown) => {
+        console.warn('Failed to load Mainnet opportunity:', error)
       })
 
     return () => {
@@ -305,8 +358,13 @@ function GearboxApp() {
   useEffect(() => {
     let cancelled = false
 
-    if (!opportunity || !address || !selectedRoute) {
+    if (!address || !opportunity || !selectedRoute) {
       setApprovalTarget(undefined)
+      return
+    }
+
+    if (!opportunity.sdk) {
+      setApprovalTarget(selectedRoute.address)
       return
     }
 
@@ -340,6 +398,12 @@ function GearboxApp() {
     }
     
     checkedOpenPositionKeys.current.add(key)
+
+    if (!opportunity.sdk) {
+      // Mock for unavailable SDK
+      setHasOpenPosition(hasStoredOpenPosition(address, opportunity.strategyId))
+      return
+    }
 
     const validCreditManagers = opportunity.creditManagers.map(cm => cm.address)
     const fetches = validCreditManagers.map(cm => 
@@ -430,10 +494,16 @@ function GearboxApp() {
   )
 
   const handleExecute = useCallback(async () => {
-    if (!selectedOpportunityIsExecutable || !opportunity || !address || !amountRaw || !selectedRoute) {
-      alert(`Debug early return:\nExecutable: ${selectedOpportunityIsExecutable}\nOpp: ${!!opportunity}\nAddress: ${address}\nAmount: ${amountRaw}\nRoute: ${!!selectedRoute}`)
+    if (!selectedOpportunityIsExecutable || !address || !amountRaw) {
+      alert('Please connect your wallet and enter a valid amount.')
       return
     }
+
+    if (!opportunity || !selectedRoute) {
+      alert('The strategy data is still loading or failed to load. Please wait or try refreshing.')
+      return
+    }
+
     setHasStartedFlow(true)
     if (routeWarning) {
       setExecutionError(routeWarning)
