@@ -61,14 +61,13 @@ const MAINNET_WETH_OPPORTUNITY_ID = 'mainnet-weth-wmoo-curve-eth-weth'
 
 const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   id: MAINNET_WETH_OPPORTUNITY_ID,
-  strategyId: 'wmooCurveETH+-WETH',
+  strategyId: MAINNET_STRATEGY_ID,
   strategyName: 'WMoo Curve ETH+-WETH',
   tokenSymbol: 'WETH',
   chainName: 'Ethereum',
-  apyLabel: 'Current APY 14.08%',
-  leverageLabel: '7.60x target',
+  apyLabel: 'APY loading',
+  leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
-  minDepositLabel: 'Min deposit: 1.5 WETH',
   isExecutable: true,
 }
 
