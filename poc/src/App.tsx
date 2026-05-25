@@ -201,16 +201,38 @@ function GearboxApp() {
   const opportunityViews = useMemo(() => {
     const views: OpportunityView[] = []
     
-    // Monad Routes
-    if (monadOpportunity) {
-      const uniqueRoutes = new Map<string, typeof monadOpportunity.creditManagers[0]>()
+    function processOpportunity(
+      opp: LoadedGearboxOpportunity | undefined,
+      networkIdPrefix: string,
+      chainName: string,
+      defaultStrategyId: string
+    ) {
+      if (!opp) return false
+
+      const uniqueRoutes = new Map<string, typeof opp.creditManagers[0]>()
       
-      for (const route of monadOpportunity.creditManagers) {
-        if (route.maxDebt > 0n) {
-          const existing = uniqueRoutes.get(route.collateralToken)
-          if (!existing || route.maxDebt > existing.maxDebt) {
-            uniqueRoutes.set(route.collateralToken, route)
-          }
+      for (const route of opp.creditManagers) {
+        if (route.maxDebt <= 0n) continue
+        const existing = uniqueRoutes.get(route.collateralToken)
+        if (!existing) {
+          uniqueRoutes.set(route.collateralToken, route)
+          continue
+        }
+        
+        const apyCurrent = route.apy ?? 0
+        const apyExisting = existing.apy ?? 0
+        
+        let shouldReplace = false
+        if (Math.abs(apyCurrent - apyExisting) > 0.001) {
+          shouldReplace = apyCurrent > apyExisting
+        } else if (route.minDebt !== existing.minDebt) {
+          shouldReplace = route.minDebt < existing.minDebt
+        } else {
+          shouldReplace = route.maxDebt > existing.maxDebt
+        }
+        
+        if (shouldReplace) {
+          uniqueRoutes.set(route.collateralToken, route)
         }
       }
 
@@ -229,38 +251,26 @@ function GearboxApp() {
         seenSymbols.add(displaySymbol)
 
         views.push({
-          id: `monad-${route.address}`,
-          strategyId: STRATEGY_ID,
-          strategyName: monadOpportunity.strategyName,
+          id: `${networkIdPrefix}-${route.address}`,
+          strategyId: defaultStrategyId,
+          strategyName: opp.strategyName,
           tokenSymbol: displaySymbol,
-          chainName: 'Monad',
+          chainName,
           apyLabel: formatOpportunityApy(route.apy),
           leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
-          protectionLabel: monadOpportunity.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
+          protectionLabel: opp.botAddress ? (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Deleverage bot included') : (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Protection bot discovery pending'),
           minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
-        })
-      })
-    } else {
-      views.push(baseOpportunityView(undefined, undefined))
-    }
-    
-    // Mainnet Routes
-    if (mainnetOpportunity) {
-      mainnetOpportunity.creditManagers.forEach(route => {
-        views.push({
-          id: `mainnet-${route.address}`,
-          strategyId: MAINNET_STRATEGY_ID,
-          strategyName: mainnetOpportunity.strategyName,
-          tokenSymbol: route.collateralSymbol,
-          chainName: 'Ethereum',
-          apyLabel: formatOpportunityApy(route.apy),
-          leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
-          protectionLabel: mainnetOpportunity.botAddress ? 'Mainnet strategy' : 'Mainnet strategy',
-          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${route.collateralSymbol}`,
           isExecutable: true,
         })
       })
-    } else {
+      return true
+    }
+
+    if (!processOpportunity(monadOpportunity, 'monad', 'Monad', STRATEGY_ID)) {
+      views.push(baseOpportunityView(undefined, undefined))
+    }
+    
+    if (!processOpportunity(mainnetOpportunity, 'mainnet', 'Ethereum', MAINNET_STRATEGY_ID)) {
       views.push(MAINNET_WETH_OPPORTUNITY)
     }
     
