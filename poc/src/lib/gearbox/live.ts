@@ -13,12 +13,15 @@ import {
 export const STRATEGY_ID = 'AUSDCT0'
 export const TARGET_TOKEN = '0x942644106B073E30D72c2C5D7529D5C296ea91ab' as Address
 export const MONAD_CHAIN_ID = 143
+export const MAINNET_CHAIN_ID = 1
 export const DEFAULT_SLIPPAGE_BPS = 50
 export const DEFAULT_QUOTA_RESERVE_BPS = 500n
 export const TARGET_HEALTH_FACTOR_BPS = 10_300n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
 export const DEFAULT_GEARBOX_APY_URL = '/gearbox-apy/latest.json'
 export const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || 'https://rpc.monad.xyz'
+export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
+export const MAINNET_STRATEGY_ID = 'wmooCurveETH+-WETH'
 export const GEARBOX_APY_URL = resolveGearboxApyUrl(import.meta.env.VITE_GEARBOX_APY_URL)
 
 export function resolveGearboxApyUrl(url: string | undefined): string {
@@ -98,15 +101,36 @@ export interface GearboxCreditManagerRoute {
   collateralDecimals: number
 }
 
-let cachedOpportunity: Promise<LoadedGearboxOpportunity> | undefined
+let cachedOpportunities = new Map<string, Promise<LoadedGearboxOpportunity>>()
 
 export function resetGearboxOpportunityCache() {
-  cachedOpportunity = undefined
+  cachedOpportunities.clear()
 }
 
-export function loadGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
-  cachedOpportunity ??= createGearboxOpportunity()
-  return cachedOpportunity
+export interface LoadOpportunityOptions {
+  chainId: number
+  chainName: 'Mainnet' | 'Arbitrum' | 'Optimism' | 'Monad'
+  rpcUrl: string
+  strategyId: string
+  fallbackStrategy?: StrategyConfigLike
+}
+
+export function loadGearboxOpportunity(options?: LoadOpportunityOptions): Promise<LoadedGearboxOpportunity> {
+  const finalOptions = options || {
+    chainId: MONAD_CHAIN_ID,
+    chainName: 'Monad',
+    rpcUrl: MONAD_RPC_URL,
+    strategyId: STRATEGY_ID,
+    fallbackStrategy: FALLBACK_STRATEGY,
+  }
+  
+  const key = `${finalOptions.chainId}-${finalOptions.strategyId}`
+  let cached = cachedOpportunities.get(key)
+  if (!cached) {
+    cached = createGearboxOpportunity(finalOptions)
+    cachedOpportunities.set(key, cached)
+  }
+  return cached
 }
 
 function addressKey(address: Address): Address {
@@ -146,15 +170,16 @@ function getSingleQuotaRateWithFee(creditManager: StrategyCreditManagerLike, tar
   return (BigInt(quota.rate) * BigInt(10_000 + creditManager.feeInterest)) / 10_000n
 }
 
-async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
+async function createGearboxOpportunity(options: LoadOpportunityOptions): Promise<LoadedGearboxOpportunity> {
+  const { chainId, chainName, rpcUrl, strategyId, fallbackStrategy } = options
   const remoteConfigs = new RemoteConfigsPlugin(true)
   const apy = new ApyPlugin(true, { apyUrl: GEARBOX_APY_URL })
   const bots = new BotsPlugin(true)
 
   const sdk = new OnchainSDK(
-    'Monad',
+    chainName,
     {
-      rpcURLs: [MONAD_RPC_URL],
+      rpcURLs: [rpcUrl],
       timeout: 60_000,
     },
     {
@@ -175,11 +200,15 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
 
   const strategy = (
     remoteConfigs.loaded
-      ? remoteConfigs.strategies.find(item => item.id === STRATEGY_ID)
+      ? remoteConfigs.strategies.find(item => item.id === strategyId)
       : undefined
   ) as StrategyConfigLike | undefined
 
-  const resolvedStrategy = strategy || FALLBACK_STRATEGY
+  const resolvedStrategy = strategy || fallbackStrategy
+  if (!resolvedStrategy) {
+    throw new Error(`Strategy ${strategyId} not found and no fallback provided.`)
+  }
+  
   const strategyInfoSnapshot = apy.loaded
     ? apy.getStrategyInfoSnapshot({
         slippage: DEFAULT_SLIPPAGE_BPS,
@@ -189,8 +218,8 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
         showHiddenStrategies: false,
       })
     : undefined
-  const info = strategyInfoSnapshot?.strategiesInfo[MONAD_CHAIN_ID]?.[STRATEGY_ID]
-  const strategyCreditManagers = strategyInfoSnapshot?.cmsOfStrategiesByChain?.[MONAD_CHAIN_ID]?.[STRATEGY_ID] as
+  const info = strategyInfoSnapshot?.strategiesInfo[chainId]?.[strategyId]
+  const strategyCreditManagers = strategyInfoSnapshot?.cmsOfStrategiesByChain?.[chainId]?.[strategyId] as
     | Record<Address, StrategyCreditManagerLike>
     | undefined
   const targetTokenApy = apy.loaded
@@ -256,14 +285,14 @@ async function createGearboxOpportunity(): Promise<LoadedGearboxOpportunity> {
 
   return {
     sdk,
-    strategyId: STRATEGY_ID,
+    strategyId,
     strategyName: resolvedStrategy.name,
     targetToken: resolvedStrategy.tokenOutAddress,
     creditManager,
     collateralToken,
     collateralSymbol,
     collateralDecimals,
-    chainName: 'Monad',
+    chainName,
     maxApy: adjustedApy,
     apyLabel: formatOpportunityApy(adjustedApy),
     maxLeverage,

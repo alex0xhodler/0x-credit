@@ -124,11 +124,16 @@ export async function prepareOpenStrategyTx({
   botAddress,
   referralCode,
 }: PrepareOpenStrategyInput): Promise<PreparedOpenStrategyTx> {
+  const plan = calculateLoopPlan({ collateralAmount, leverage, quotaReserveBps })
+
+  if (!sdk) {
+    throw new Error('Gearbox SDK is not available.')
+  }
+
   const narrowedSdk = sdk as GearboxSdkNarrowed
   const cmSuite = narrowedSdk.marketRegister.findCreditManager(creditManager)
   const cmAddress = cmSuite.creditManager.address
   const creditFacade = cmSuite.creditFacade.address
-  const plan = calculateLoopPlan({ collateralAmount, leverage, quotaReserveBps })
   const minDebt = cmSuite.creditFacade.minDebt ?? 0n
   const maxDebt = cmSuite.creditFacade.maxDebt ?? 0n
 
