@@ -1,5 +1,5 @@
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
-import { monad } from '@reown/appkit/networks'
+import { monad, mainnet } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
 
 // Get projectId from https://dashboard.reown.com
@@ -15,7 +15,7 @@ export const metadata = {
   icons: ['https://avatars.githubusercontent.com/u/179229932'],
 }
 
-export const networks = [monad] as [AppKitNetwork, ...AppKitNetwork[]]
+export const networks = [monad, mainnet] as [AppKitNetwork, ...AppKitNetwork[]]
 
 //Set up the Wagmi Adapter (Config)
 export const wagmiAdapter = new WagmiAdapter({

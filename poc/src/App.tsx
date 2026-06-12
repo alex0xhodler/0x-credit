@@ -212,6 +212,7 @@ function GearboxApp() {
       
       for (const route of opp.creditManagers) {
         if (route.maxDebt <= 0n) continue
+        if (route.apy !== undefined && route.apy < 0) continue
         const existing = uniqueRoutes.get(route.collateralToken)
         if (!existing) {
           uniqueRoutes.set(route.collateralToken, route)
@@ -519,10 +520,14 @@ function GearboxApp() {
     })
     setSteps(nextSteps)
 
+    const targetChainId = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID || selectedOpportunityId.startsWith('mainnet-')
+      ? MAINNET_CHAIN_ID
+      : MONAD_CHAIN_ID
+
     try {
       if (!publicClient) throw new Error('Wallet public client is not ready.')
-      if (chainId !== MONAD_CHAIN_ID) {
-        await switchChainAsync({ chainId: MONAD_CHAIN_ID })
+      if (chainId !== targetChainId) {
+        await switchChainAsync({ chainId: targetChainId })
       }
 
       const prepared = await prepareOpenStrategyTx({
@@ -550,7 +555,7 @@ function GearboxApp() {
         nextSteps = markStepActive(markStepActive(nextSteps, 'approve'), 'account')
         setSteps(nextSteps)
         const batch = await sendCallsAsync({
-          chainId: MONAD_CHAIN_ID,
+          chainId: targetChainId,
           calls: [
             {
               to: selectedRoute.collateralToken,
@@ -618,6 +623,7 @@ function GearboxApp() {
     publicClient,
     runSequentialApproval,
     routeWarning,
+    selectedOpportunityId,
     selectedOpportunityIsExecutable,
     selectedRoute,
     sendCallsAsync,
@@ -680,8 +686,11 @@ function GearboxApp() {
         setSelectedOpportunityId(nextOpportunity.id)
         setHasStartedFlow(true)
         setForceNewAccount(true)
-        if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID) setAmount('1.5')
-        if (nextOpportunity.id.startsWith('monad-') && !amount) setAmount('1500')
+        if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID || nextOpportunity.id.startsWith('mainnet-')) {
+          setAmount('3')
+        } else if (nextOpportunity.id.startsWith('monad-')) {
+          if (!amount || amount === '1.5' || amount === '3') setAmount('1500')
+        }
       }}
       onResetFlow={() => {
         setHasStartedFlow(false)
