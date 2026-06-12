@@ -101,7 +101,7 @@ export interface GearboxCreditManagerRoute {
   collateralDecimals: number
 }
 
-let cachedOpportunities = new Map<string, Promise<LoadedGearboxOpportunity>>()
+const cachedOpportunities = new Map<string, Promise<LoadedGearboxOpportunity>>()
 
 export function resetGearboxOpportunityCache() {
   cachedOpportunities.clear()
