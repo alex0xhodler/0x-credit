@@ -272,10 +272,10 @@ function GearboxApp() {
       return true
     }
 
-    if (!processOpportunity(monadOpportunity, 'monad', 'Monad', STRATEGY_ID)) {
-      views.push(baseOpportunityView(undefined, undefined))
-    }
-    
+    // if (!processOpportunity(monadOpportunity, 'monad', 'Monad', STRATEGY_ID)) {
+    //   views.push(baseOpportunityView(undefined, undefined))
+    // }
+
     if (!processOpportunity(mainnetOpportunity, 'mainnet', 'Ethereum', MAINNET_STRATEGY_ID)) {
       views.push(MAINNET_WETH_OPPORTUNITY)
     }
@@ -284,12 +284,11 @@ function GearboxApp() {
   }, [monadOpportunity, mainnetOpportunity])
 
   useEffect(() => {
-    if (monadOpportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
-      const firstMonad = opportunityViews.find(v => v.id.startsWith('monad-'))
-      if (firstMonad) {
-        setSelectedOpportunityId(firstMonad.id)
-      }
-    } else if (mainnetOpportunity && selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID) {
+    // if (monadOpportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
+    //   const firstMonad = opportunityViews.find(v => v.id.startsWith('monad-'))
+    //   if (firstMonad) setSelectedOpportunityId(firstMonad.id)
+    // } else
+    if (mainnetOpportunity && selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID) {
       const firstMainnet = opportunityViews.find(v => v.id.startsWith('mainnet-'))
       if (firstMainnet) {
         setSelectedOpportunityId(firstMainnet.id)
@@ -348,16 +347,16 @@ function GearboxApp() {
   useEffect(() => {
     let cancelled = false
 
-    loadGearboxOpportunity()
-      .then(nextOpportunity => {
-        if (cancelled) return
-        setMonadOpportunity(nextOpportunity)
-        setLoadError(undefined)
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return
-        setLoadError(error instanceof Error ? error.message : 'Failed to load Monad opportunity.')
-      })
+    // loadGearboxOpportunity()
+    //   .then(nextOpportunity => {
+    //     if (cancelled) return
+    //     setMonadOpportunity(nextOpportunity)
+    //     setLoadError(undefined)
+    //   })
+    //   .catch((error: unknown) => {
+    //     if (cancelled) return
+    //     setLoadError(error instanceof Error ? error.message : 'Failed to load Monad opportunity.')
+    //   })
 
     loadGearboxOpportunity({
       chainId: MAINNET_CHAIN_ID,
