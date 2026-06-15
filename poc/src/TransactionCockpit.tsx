@@ -65,10 +65,9 @@ export interface TransactionCockpitProps {
 type Horizon = 1 | 3 | 5
 
 const POWERED_BY_PARTNERS = [
-  { name: 'Gearbox', logo: 'https://docs.gearbox.finance/assets/brand/gearbox-icon.svg' },
+  { name: 'Gearbox', logo: '/powered-by/gearbox.webp' },
   { name: 'KPK', logo: '/powered-by/kpk.svg' },
   { name: 'Beefy', logo: '/powered-by/beefy.svg' },
-  { name: 'Edge UltraYield', logo: '/powered-by/edge-ultrayield.svg' },
   { name: 'Curve', logo: 'https://www.gearbox.finance/assets/partners/partner-curve.svg' },
 ] as const
 
@@ -212,6 +211,7 @@ function ProjectionChart({ deposit, apyPercent, baseApyPercent, horizon, symbol 
             if (!active || !payload?.length) return null
             const relevant = (payload as unknown as Array<{ dataKey: string; value: number; stroke: string }>)
               .filter(p => p.dataKey === 'amplified' || p.dataKey === 'plain')
+              .sort((a, b) => a.dataKey === 'amplified' ? -1 : 1)
             if (!relevant.length) return null
             const m = Number(label)
             const timeLabel = m >= 12
@@ -566,30 +566,6 @@ export function TransactionCockpit({
               </div>
             </div>
 
-            {/* Position preview card */}
-            {validAmount && annualYield !== undefined && (
-              <div className="position-preview" aria-label="Position preview">
-                <div className="preview-row">
-                  <span className="preview-pay">
-                    <span className="preview-dim">Deposit</span>
-                    <strong>{parsedAmount} {opportunity.tokenSymbol}</strong>
-                  </span>
-                  <span className="preview-arrow">→</span>
-                  <span className="preview-get">
-                    <span className="preview-dim">Earn</span>
-                    <strong className="preview-yield">{annualYield.toFixed(2)} {opportunity.tokenSymbol} / year</strong>
-                  </span>
-                </div>
-                {borrowedEstimate !== undefined && borrowedEstimate > 0 && (
-                  <div className="preview-meta">
-                    <span>Leverage ×{leverageMultiple.toFixed(1)}</span>
-                    <span>·</span>
-                    <span>Borrows {formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Alerts */}
             {!isProjectReady && (
               <p className="alert">Set VITE_REOWN_PROJECT_ID to enable wallet connections.</p>
@@ -631,6 +607,28 @@ export function TransactionCockpit({
 
             {/* CTA */}
             <div className="builder-footer">
+              {validAmount && annualYield !== undefined && (
+                <div className="position-preview" aria-label="Position preview">
+                  <div className="preview-row">
+                    <span className="preview-pay">
+                      <span className="preview-dim">Deposit</span>
+                      <strong>{parsedAmount} {opportunity.tokenSymbol}</strong>
+                    </span>
+                    <span className="preview-arrow">→</span>
+                    <span className="preview-get">
+                      <span className="preview-dim">Earn</span>
+                      <strong className="preview-yield">{annualYield.toFixed(2)} {opportunity.tokenSymbol} / year</strong>
+                    </span>
+                  </div>
+                  {borrowedEstimate !== undefined && borrowedEstimate > 0 && (
+                    <div className="preview-meta">
+                      <span>Leverage ×{leverageMultiple.toFixed(1)}</span>
+                      <span>·</span>
+                      <span>Borrows {formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               {actionButton}
             </div>
           </section>
