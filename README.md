@@ -1,6 +1,6 @@
 # 0x.credit
 
-0x.credit is a focused Gearbox earning-route proof of concept. It uses Reown AppKit, wagmi, viem, and the Gearbox SDK to help a user choose an opportunity, approve the deposit token, and open a Gearbox credit account from one focused flow.
+0x.credit is a focused Gearbox earning-route proof of concept. It uses Reown AppKit, wagmi, viem, and the Gearbox SDK to let a user configure a deposit, visualise projected earnings, and open a Gearbox credit account — all from a single cockpit screen.
 
 ## Run locally
 
