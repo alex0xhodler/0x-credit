@@ -1832,11 +1832,15 @@ button {
   display: grid;
   grid-template-columns: 20px 1fr;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 7px 12px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: var(--paper);
   font-size: 13px;
+}
+
+.step-rail .step-card.active {
+  padding: 10px 12px;
 }
 
 .step-rail .step-card.active {

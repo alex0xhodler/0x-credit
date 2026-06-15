@@ -588,9 +588,9 @@ export function TransactionCockpit({
                           <span>{collapsed ? 'Approved' : step.label}</span>
                           <small>{stepStatusLabel(step)}</small>
                         </div>
-                        {!collapsed && <p>{step.id === 'account' ? `Opening with ${amount} ${opportunity.tokenSymbol}. The approved amount is supplied inside this wallet action.` : step.detail}</p>}
-                        {!collapsed && step.walletPrompt && <p className="wallet-prompt">{step.walletPrompt}</p>}
-                        {!collapsed && step.txHash && <p className="tx-hash">{step.txHash}</p>}
+                        {!collapsed && step.status === 'active' && <p>{step.id === 'account' ? `Opening with ${amount} ${opportunity.tokenSymbol}.` : step.detail}</p>}
+                        {!collapsed && step.status === 'active' && step.walletPrompt && <p className="wallet-prompt">{step.walletPrompt}</p>}
+                        {step.txHash && <p className="tx-hash">{step.txHash}</p>}
                         {stepError && <p className="step-error">{stepError}</p>}
                       </div>
                     </li>
