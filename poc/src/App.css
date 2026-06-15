@@ -1749,12 +1749,13 @@ button {
 /* Position preview card */
 .position-preview {
   background: var(--canvas);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 14px;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
 
 .preview-row {
@@ -1845,12 +1846,25 @@ button {
 
 /* Builder footer */
 .builder-footer {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px 0 clamp(12px, 2vw, 20px);
-  border-top: 1px solid var(--line);
+  padding: 16px 0 clamp(12px, 2vw, 20px);
   background: var(--paper);
+  /* Fade gradient that overlays the scroll area just above the footer */
+  z-index: 1;
+}
+
+.builder-footer::before {
+  content: '';
+  position: absolute;
+  top: -48px;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent, var(--paper));
+  pointer-events: none;
 }
 
 .builder-footer .primary-action {
