@@ -261,6 +261,12 @@ function GearboxApp() {
           protectionLabel: opp.botAddress ? (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Deleverage bot included') : (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Protection bot discovery pending'),
           minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
           isExecutable: true,
+          apyPercent: route.apy !== undefined ? route.apy / 10_000 : undefined,
+          baseApyPercent: route.baseApy !== undefined ? route.baseApy / 10_000 : undefined,
+          borrowRatePercent: route.baseBorrowRate / 10_000,
+          leverageMultiple: Number(route.maxLeverage) / 100,
+          minimumDeposit: Number(route.minimumDepositAmount) / Math.pow(10, route.collateralDecimals),
+          collateralDecimals: route.collateralDecimals,
         })
       })
       return true
@@ -331,6 +337,18 @@ function GearboxApp() {
     if (!opportunity) return
     setHasOpenPosition(hasStoredOpenPosition(address, opportunity.strategyId))
   }, [address, opportunity])
+
+  // Sync amount to a sensible default when the displayed opportunity changes token
+  useEffect(() => {
+    if (!displayedOpportunity?.minimumDeposit) return
+    const MIN = displayedOpportunity.minimumDeposit
+    const decimals = Math.min(4, displayedOpportunity.collateralDecimals ?? 4)
+    setAmount(prev => {
+      const isStaleDefault = prev === '1500' || prev === '3' || prev === '1.5' || prev === ''
+      if (!isStaleDefault) return prev
+      return (MIN * 2).toFixed(decimals)
+    })
+  }, [displayedOpportunity?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false

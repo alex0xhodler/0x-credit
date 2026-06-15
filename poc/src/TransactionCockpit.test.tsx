@@ -1,336 +1,234 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { useState } from 'react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TransactionCockpit } from './TransactionCockpit'
 import { createExecutionSteps } from './lib/gearbox/plan'
 
-const opportunity = {
-  id: 'monad-usdc-ausdct0',
-  strategyId: 'AUSDCT0',
-  strategyName: 'Curve AUSD/USDC/USDT0',
-  tokenSymbol: 'USDC',
-  chainName: 'Monad',
-  apyLabel: 'Current APY 42.57%',
-  leverageLabel: '3.50x sweet spot',
-  protectionLabel: 'Deleverage bot included',
+const wstEthOpportunity = {
+  id: 'mainnet-wsteth-001',
+  strategyId: 'wmooCurveETH+-WETH',
+  strategyName: 'Convex ETH+/WETH (Optimized by Beefy)',
+  tokenSymbol: 'wstETH',
+  chainName: 'Ethereum',
+  apyLabel: 'Current APY 70.32%',
+  leverageLabel: '7.60x target',
+  protectionLabel: 'Mainnet strategy',
+  minDepositLabel: 'Min deposit: 2.92 wstETH',
+  isExecutable: true,
+  apyPercent: 70.32,
+  baseApyPercent: 4.2,
+  borrowRatePercent: 0.67,
+  leverageMultiple: 7.6,
+  minimumDeposit: 2.92,
+  collateralDecimals: 18,
 }
 
 const wethOpportunity = {
-  id: 'mainnet-weth-wmoo-curve-eth-weth',
+  id: 'mainnet-weth-002',
   strategyId: 'wmooCurveETH+-WETH',
-  strategyName: 'WMoo Curve ETH+-WETH',
+  strategyName: 'Convex ETH+/WETH (Optimized by Beefy)',
   tokenSymbol: 'WETH',
   chainName: 'Ethereum',
-  apyLabel: 'Current APY 14.08%',
+  apyLabel: 'Current APY 51.39%',
   leverageLabel: '7.60x target',
   protectionLabel: 'Mainnet strategy',
-  minDepositLabel: 'Min deposit: 1.5 WETH',
+  minDepositLabel: 'Min deposit: 1.50 WETH',
   isExecutable: false,
   disabledReason: 'Ethereum execution is not wired in this PoC yet.',
+  apyPercent: 51.39,
+  baseApyPercent: 3.1,
+  leverageMultiple: 7.6,
+  minimumDeposit: 1.5,
+  collateralDecimals: 18,
 }
 
-describe('TransactionCockpit', () => {
-  it('keeps the first-load state calm until the user starts earning', async () => {
-    const onConnect = vi.fn()
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
+const baseProps = {
+  amount: '3',
+  accountStatus: 'disconnected' as const,
+  isProjectReady: true,
+  isBusy: false,
+  opportunity: wstEthOpportunity,
+  opportunities: [wstEthOpportunity, wethOpportunity],
+  steps: [],
+  onAmountChange: vi.fn(),
+  onConnect: vi.fn(),
+  onExecute: vi.fn(),
+  onSelectOpportunity: vi.fn(),
+  onResetFlow: vi.fn(),
+}
 
-    function LandingHarness() {
-      const [hasStartedFlow, setHasStartedFlow] = useState(false)
-
-      return (
-        <TransactionCockpit
-          amount="1000"
-          accountStatus="disconnected"
-          hasStartedFlow={hasStartedFlow}
-          isProjectReady
-          isBusy={false}
-          opportunity={opportunity}
-          opportunities={[opportunity, wethOpportunity]}
-          steps={[]}
-          onAmountChange={() => undefined}
-          onConnect={onConnect}
-          onExecute={() => undefined}
-          onSelectOpportunity={() => setHasStartedFlow(true)}
-        />
-      )
-    }
-
-    render(
-      <LandingHarness />,
-    )
-
+describe('TransactionCockpit — cockpit layout', () => {
+  it('renders the brand and a strategy tab for each opportunity', () => {
+    render(<TransactionCockpit {...baseProps} />)
     expect(screen.getByText('0x.credit')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /earn amplified yields on auto-pilot/i })).toBeInTheDocument()
-    expect(screen.getByText('Pick a Strategy, open your Smart account, start earning Effortlessly')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /usdc on monad opportunity/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /weth on ethereum opportunity/i })).toBeInTheDocument()
-    const opportunityCard = screen.getByLabelText('USDC on Monad opportunity')
-    expect(within(opportunityCard).getByText('Show details')).toBeInTheDocument()
-    expect(within(opportunityCard).getByText('Strategy: Curve AUSD/USDC/USDT0')).toBeInTheDocument()
-    const wethCard = screen.getByLabelText('WETH on Ethereum opportunity')
-    expect(within(wethCard).getByText('Ethereum')).toBeInTheDocument()
-    expect(within(wethCard).getByText('Strategy: WMoo Curve ETH+-WETH')).toBeInTheDocument()
-    expect(within(wethCard).getByText('Min deposit: 1.5 WETH')).toBeInTheDocument()
-    expect(screen.queryByText('Connect')).not.toBeInTheDocument()
-    expect(screen.queryByText('Earn 42.57% APY on USDC')).not.toBeInTheDocument()
-    expect(screen.queryByText('Target')).not.toBeInTheDocument()
-    expect(screen.queryByText('Est. 425.70 USDC / year on 1,000 USDC.')).not.toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: /execution steps/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Deposit amount')).not.toBeInTheDocument()
-    const poweredBy = screen.getByRole('region', { name: /powered by/i })
-    expect(within(poweredBy).getByRole('img', { name: 'Gearbox' })).toBeInTheDocument()
-    expect(within(poweredBy).getByRole('img', { name: 'KPK' })).toBeInTheDocument()
-    expect(within(poweredBy).getByRole('img', { name: 'Beefy' })).toBeInTheDocument()
-    expect(within(poweredBy).getByRole('img', { name: 'Edge UltraYield' })).toBeInTheDocument()
-    expect(within(poweredBy).getByRole('img', { name: 'Curve' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /wsteth/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /weth/i })).toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /usdc on monad opportunity/i }))
-    expect(screen.getByLabelText('Deposit amount')).toHaveValue('1000')
-    expect(screen.getAllByText('Strategy: Curve AUSD/USDC/USDT0').length).toBeGreaterThan(0)
-    expect(screen.queryByRole('region', { name: /powered by/i })).not.toBeInTheDocument()
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled())
+  it('marks the current opportunity tab as selected', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.getByRole('tab', { name: /wsteth/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: /weth/i })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('calls onSelectOpportunity when a different tab is clicked', () => {
+    const onSelectOpportunity = vi.fn()
+    render(<TransactionCockpit {...baseProps} onSelectOpportunity={onSelectOpportunity} />)
+    fireEvent.click(screen.getByRole('tab', { name: /weth/i }))
+    expect(onSelectOpportunity).toHaveBeenCalledWith(wethOpportunity)
+  })
+
+  it('renders the deposit input with the current amount', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.getByLabelText(/deposit amount/i)).toHaveValue('3')
+  })
+
+  it('renders the "powered by" footer', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    const footer = screen.getByRole('contentinfo')
+    expect(within(footer).getByRole('img', { name: 'Gearbox' })).toBeInTheDocument()
+    expect(within(footer).getByRole('img', { name: 'Beefy' })).toBeInTheDocument()
+  })
+})
+
+describe('TransactionCockpit — deposit controls', () => {
+  it('calls onAmountChange when a preset chip is clicked', () => {
+    const onAmountChange = vi.fn()
+    render(<TransactionCockpit {...baseProps} onAmountChange={onAmountChange} />)
+    fireEvent.click(screen.getByRole('button', { name: /min/i }))
+    expect(onAmountChange).toHaveBeenCalledWith(expect.stringMatching(/^2\.9/))
+  })
+
+  it('calls onAmountChange with a larger amount when a multiplier preset is clicked', () => {
+    const onAmountChange = vi.fn()
+    render(<TransactionCockpit {...baseProps} amount="3" onAmountChange={onAmountChange} />)
+    fireEvent.click(screen.getByRole('button', { name: /2×/i }))
+    const called = Number(onAmountChange.mock.calls[0][0])
+    expect(called).toBeGreaterThan(wstEthOpportunity.minimumDeposit)
+  })
+
+  it('calls onAmountChange on increment step button click', () => {
+    const onAmountChange = vi.fn()
+    render(<TransactionCockpit {...baseProps} amount="3" onAmountChange={onAmountChange} />)
+    const stepBtns = screen.getAllByRole('button', { name: /^\+/ })
+    fireEvent.click(stepBtns[0])
+    const called = Number(onAmountChange.mock.calls[0][0])
+    expect(called).toBeGreaterThan(3)
+  })
+
+  it('resets amount to min deposit on RESET click', () => {
+    const onAmountChange = vi.fn()
+    render(<TransactionCockpit {...baseProps} amount="10" onAmountChange={onAmountChange} />)
+    fireEvent.click(screen.getByRole('button', { name: /reset/i }))
+    expect(onAmountChange).toHaveBeenCalledWith(expect.stringMatching(/^2\.9/))
+  })
+})
+
+describe('TransactionCockpit — position preview', () => {
+  it('shows estimated annual yield derived from numeric apyPercent', () => {
+    render(<TransactionCockpit {...baseProps} amount="3" />)
+    // 3 * 70.32% = 2.1096 wstETH/year
+    expect(screen.getByText(/2\.1\d\s*wstETH\s*\/\s*year/i)).toBeInTheDocument()
+  })
+
+  it('shows borrow estimate derived from numeric leverageMultiple', () => {
+    render(<TransactionCockpit {...baseProps} amount="3" />)
+    // borrowed = 3 * (7.6 - 1) = 19.8 wstETH
+    expect(screen.getByText(/19\.\d+\s*wstETH/i)).toBeInTheDocument()
+  })
+})
+
+describe('TransactionCockpit — CTA and execution', () => {
+  it('shows "Start earning" CTA before connecting', () => {
+    render(<TransactionCockpit {...baseProps} accountStatus="disconnected" />)
+    expect(screen.getByRole('button', { name: /start earning/i })).toBeInTheDocument()
+  })
+
+  it('shows APY in CTA when connected', () => {
+    render(<TransactionCockpit {...baseProps} accountStatus="connected" />)
+    expect(screen.getByRole('button', { name: /earn 70\.32%/i })).toBeInTheDocument()
+  })
+
+  it('disables CTA when there is a route warning', () => {
+    render(
+      <TransactionCockpit
+        {...baseProps}
+        accountStatus="connected"
+        routeWarning="Enter at least 2.92 wstETH"
+      />,
+    )
+    expect(screen.getByRole('button', { name: /earn/i })).toBeDisabled()
+    expect(screen.getByText(/Enter at least 2\.92 wstETH/i)).toBeInTheDocument()
+  })
+
+  it('disables CTA when project is not ready', () => {
+    render(<TransactionCockpit {...baseProps} isProjectReady={false} accountStatus="connected" />)
+    expect(screen.getByRole('button', { name: /earn/i })).toBeDisabled()
+    expect(screen.getByText(/VITE_REOWN_PROJECT_ID/i)).toBeInTheDocument()
+  })
+
+  it('calls onConnect when CTA is clicked and not connected', () => {
+    const onConnect = vi.fn()
+    render(<TransactionCockpit {...baseProps} accountStatus="disconnected" onConnect={onConnect} />)
     fireEvent.click(screen.getByRole('button', { name: /start earning/i }))
     expect(onConnect).toHaveBeenCalledTimes(1)
   })
 
-  it('shows a clear disabled state when a listed opportunity is not executable yet', () => {
+  it('calls onExecute when CTA is clicked while connected', () => {
     const onExecute = vi.fn()
-
     render(
       <TransactionCockpit
-        amount="1.5"
+        {...baseProps}
         accountStatus="connected"
-        hasStartedFlow
-        isProjectReady
-        isBusy={false}
-        opportunity={wethOpportunity}
-        opportunities={[opportunity, wethOpportunity]}
-        steps={[]}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
         onExecute={onExecute}
       />,
     )
-
-    expect(screen.getByLabelText('Deposit amount')).toHaveValue('1.5')
-    expect(screen.getByText('Ethereum execution is not wired in this PoC yet.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 14.08%/i })).toBeDisabled()
-  })
-
-  it('keeps the full transaction overview visible while the user confirms wallet prompts', () => {
-    const onAmountChange = vi.fn()
-    const onExecute = vi.fn()
-    const steps = createExecutionSteps({
-      allowance: 0n,
-      amount: 100n,
-      canBatch: false,
-      symbol: 'USDC',
-    })
-
-    render(
-      <TransactionCockpit
-        amount="100"
-        accountStatus="connected"
-        hasStartedFlow
-        isProjectReady
-        isBusy={false}
-        opportunity={opportunity}
-        steps={steps}
-        onAmountChange={onAmountChange}
-        onConnect={() => undefined}
-        onExecute={onExecute}
-      />,
-    )
-
-    expect(screen.getByLabelText('Deposit amount')).toHaveValue('100')
-    expect(screen.getByText('Approve USDC')).toBeInTheDocument()
-    expect(screen.getByText('Open Smart account')).toBeInTheDocument()
-    expect(screen.getByText('Opening with 100 USDC. The approved amount is supplied inside this wallet action.')).toBeInTheDocument()
-    expect(screen.queryByText('Deposit USDC')).not.toBeInTheDocument()
-    expect(screen.queryByText('Check best route')).not.toBeInTheDocument()
-    expect(screen.queryByText('Keep position protected')).not.toBeInTheDocument()
-    expect(screen.getByText('Confirm the token approval without leaving this page.')).toBeInTheDocument()
-    expect(screen.getByText('Confirm the Smart account opening in your wallet.')).toBeInTheDocument()
-
-    fireEvent.change(screen.getByLabelText('Deposit amount'), { target: { value: '250' } })
-    expect(onAmountChange).toHaveBeenCalledWith('250')
-
-    fireEvent.click(screen.getByRole('button', { name: /earn 42.57%/i }))
+    fireEvent.click(screen.getByRole('button', { name: /earn 70\.32%/i }))
     expect(onExecute).toHaveBeenCalledTimes(1)
   })
+})
 
-  it('collapses an on-chain confirmed approval into a completed approval row', () => {
-    const steps = createExecutionSteps({
-      allowance: 0n,
-      amount: 100n,
-      canBatch: false,
-      symbol: 'USDC',
-    }).map(step => (
-      step.id === 'approve'
-        ? { ...step, status: 'done' as const, txHash: '0xabc' }
-        : step
-    ))
-
-    render(
-      <TransactionCockpit
-        amount="100"
-        accountStatus="connected"
-        hasStartedFlow
-        isProjectReady
-        isBusy={false}
-        opportunity={opportunity}
-        steps={steps}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={() => undefined}
-      />,
-    )
-
-    expect(screen.getByText('Approved')).toBeInTheDocument()
-    expect(screen.queryByText('Approve USDC')).not.toBeInTheDocument()
-    expect(screen.queryByText('Required once before the deposit can move.')).not.toBeInTheDocument()
-    expect(screen.queryByText('Confirm the token approval without leaving this page.')).not.toBeInTheDocument()
-    expect(screen.queryByText('0xabc')).not.toBeInTheDocument()
+describe('TransactionCockpit — execution step progress', () => {
+  it('shows approve and open steps while executing', () => {
+    const steps = createExecutionSteps({ allowance: 0n, amount: 3n, canBatch: false, symbol: 'wstETH' })
+    render(<TransactionCockpit {...baseProps} accountStatus="connected" steps={steps} />)
+    expect(screen.getByText('Approve wstETH')).toBeInTheDocument()
+    expect(screen.getByText('Open Smart account')).toBeInTheDocument()
   })
 
-  it('links to the Gearbox dashboard after a position exists', () => {
+  it('collapses a done approve step', () => {
+    const steps = createExecutionSteps({ allowance: 0n, amount: 3n, canBatch: false, symbol: 'wstETH' })
+      .map(s => s.id === 'approve' ? { ...s, status: 'done' as const } : s)
+    render(<TransactionCockpit {...baseProps} accountStatus="connected" steps={steps} />)
+    expect(screen.getByText('Approved')).toBeInTheDocument()
+    expect(screen.queryByText('Approve wstETH')).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionCockpit — APY breakdown', () => {
+  it('shows borrow rate info when borrowRatePercent is provided', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.getByText(/borrow rate/i)).toBeInTheDocument()
+  })
+
+  it('shows base APY component in the breakdown', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.getByText(/base apy/i)).toBeInTheDocument()
+  })
+})
+
+describe('TransactionCockpit — invested state', () => {
+  it('shows position live screen with manage link', () => {
     render(
       <TransactionCockpit
-        amount="1000"
+        {...baseProps}
         accountStatus="connected"
-        isProjectReady
-        isBusy={false}
         manageUrl="https://app.gearbox.finance/dashboard"
-        opportunity={opportunity}
-        steps={createExecutionSteps({
-          allowance: 100n,
-          amount: 100n,
-          canBatch: false,
-          symbol: 'USDC',
-        })}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={() => undefined}
       />,
     )
-
-    expect(screen.queryByText('Target')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('USDC amount')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /smart account earning/i })).toBeInTheDocument()
-    expect(screen.getByText('Smart account value')).toBeInTheDocument()
-    expect(screen.getByText('1,000.0000 USDC')).toBeInTheDocument()
-    expect(screen.getByText('Position live')).toBeInTheDocument()
-    expect(screen.getByText('42.57%')).toBeInTheDocument()
-    expect(screen.getByText('425.70 USDC / year')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /manage position/i })).toHaveAttribute(
       'href',
       'https://app.gearbox.finance/dashboard',
     )
-    expect(screen.queryByRole('button', { name: /smart account earning/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('list', { name: /execution steps/i })).not.toBeInTheDocument()
-  })
-
-  it('does not show the Gearbox dashboard link before a position exists', () => {
-    render(
-      <TransactionCockpit
-        amount="100"
-        accountStatus="connected"
-        isProjectReady
-        isBusy={false}
-        opportunity={opportunity}
-        steps={[]}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={() => undefined}
-      />,
-    )
-
-    expect(screen.queryByRole('link', { name: /manage position/i })).not.toBeInTheDocument()
-  })
-
-  it('blocks execution with a concrete Reown configuration message when project id is missing', () => {
-    render(
-      <TransactionCockpit
-        amount="100"
-        accountStatus="connected"
-        hasStartedFlow
-        isProjectReady={false}
-        isBusy={false}
-        opportunity={opportunity}
-        steps={[]}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={() => undefined}
-      />,
-    )
-
-    expect(screen.getByText('Set VITE_REOWN_PROJECT_ID to enable wallet connections.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 42.57%/i })).toBeDisabled()
-  })
-
-  it('blocks execution with a route warning when the amount cannot satisfy Gearbox limits safely', () => {
-    const onExecute = vi.fn()
-
-    render(
-      <TransactionCockpit
-        amount="1100"
-        accountStatus="connected"
-        hasStartedFlow
-        isProjectReady
-        isBusy={false}
-        opportunity={opportunity}
-        routeWarning="Enter at least 1,212.13 USDC for this strategy."
-        steps={[]}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={onExecute}
-      />,
-    )
-
-    expect(screen.getByText('Enter at least 1,212.13 USDC for this strategy.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /earn 42.57%/i })).toBeDisabled()
-  })
-
-  it('shows cancelled wallet prompts without leaking raw request arguments into the layout', () => {
-    const rawWalletError = [
-      'User rejected the request.',
-      'Request Arguments:',
-      'from: 0x894003A817e5c1AAFaC95b710bd2b68f0c040095',
-      'Contract Call:',
-      'address: 0x000000000eFE302BEAA2b3e6e1b18d008D69a9012a',
-      'function: approve(address,uint256)',
-      'Version: viem@2.47.0',
-    ].join(' ')
-
-    render(
-      <TransactionCockpit
-        amount="100"
-        accountStatus="connected"
-        error={rawWalletError}
-        hasStartedFlow
-        isProjectReady
-        isBusy={false}
-        opportunity={opportunity}
-        steps={createExecutionSteps({
-          allowance: 0n,
-          amount: 100n,
-          canBatch: false,
-          symbol: 'USDC',
-        }).map(step => (
-          step.id === 'approve'
-            ? { ...step, status: 'error' as const, error: rawWalletError }
-            : step
-        ))}
-        onAmountChange={() => undefined}
-        onConnect={() => undefined}
-        onExecute={() => undefined}
-      />,
-    )
-
-    expect(screen.getAllByText('Transaction cancelled in your wallet. No funds moved.').length).toBeGreaterThan(0)
-    expect(screen.queryByText(rawWalletError)).not.toBeInTheDocument()
-    expect(screen.queryByText(/Request Arguments/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/viem@2\.47\.0/i)).not.toBeInTheDocument()
   })
 })

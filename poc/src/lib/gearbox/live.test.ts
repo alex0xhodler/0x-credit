@@ -13,6 +13,7 @@ function cm(overrides: {
   return {
     address: overrides.address,
     apy: overrides.apy,
+    baseApy: undefined,
     maxLeverage: overrides.leverage ?? 925n,
     minimumDepositAmount: 0n,
     minDebt: overrides.minDebt,

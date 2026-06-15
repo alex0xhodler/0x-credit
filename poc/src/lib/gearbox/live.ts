@@ -89,6 +89,7 @@ export interface LoadedGearboxOpportunity {
 export interface GearboxCreditManagerRoute {
   address: Address
   apy: number | undefined
+  baseApy: number | undefined
   maxLeverage: bigint
   minimumDepositAmount: bigint
   minDebt: bigint
@@ -259,6 +260,7 @@ async function createGearboxOpportunity(options: LoadOpportunityOptions): Promis
     return {
       address: cm.address,
       apy: adjustedApy,
+      baseApy: targetTokenApy,
       maxLeverage,
       minimumDepositAmount: calculateMinimumCollateralForDebt({ minDebt, leverage: maxLeverage }),
       minDebt,
