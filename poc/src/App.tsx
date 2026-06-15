@@ -190,7 +190,7 @@ function GearboxApp() {
   const [hasOpenPosition, setHasOpenPosition] = useState(false)
   const [activeCreditAccount, setActiveCreditAccount] = useState<CreditAccountSnapshotLike>()
   const [hasStartedFlow, setHasStartedFlow] = useState(false)
-  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string>(MONAD_USDC_OPPORTUNITY_ID)
+  const [selectedOpportunityId, setSelectedOpportunityId] = useState<string>(MAINNET_WETH_OPPORTUNITY_ID)
   const [forceNewAccount, setForceNewAccount] = useState(false)
   const checkedOpenPositionKeys = useRef(new Set<string>())
   
