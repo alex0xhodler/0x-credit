@@ -447,7 +447,6 @@ export function TransactionCockpit({
             ))}
           </div>
 
-          <w3m-button size="sm" />
         </header>
 
         {/* Two-pane body */}
@@ -505,6 +504,7 @@ export function TransactionCockpit({
 
           {/* Right: builder */}
           <section className="cockpit-builder" aria-label="Open Smart account">
+            <div className="builder-scroll">
             <div className="builder-heading">
               <span className="selected-label">Selected strategy</span>
               <strong className="builder-token">{opportunity.tokenSymbol} · {apyPercent > 0 ? `${apyPercent.toFixed(2)}% APY` : opportunity.apyLabel}</strong>
@@ -525,46 +525,41 @@ export function TransactionCockpit({
                 onChange={e => onAmountChange(e.target.value)}
               />
 
-              {/* Preset chips */}
-              <div className="deposit-presets">
-                {controls.presets.map(preset => (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    className="preset-chip"
-                    onClick={() => onAmountChange(preset.value.toFixed(Math.min(4, opportunity.collateralDecimals ?? 4)))}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Stepper */}
-              <div className="deposit-stepper">
+              {/* Amount presets — single row */}
+              <div className="deposit-controls">
                 <button
                   type="button"
-                  className="stepper-btn reset-btn"
-                  aria-label="Reset"
-                  onClick={() => onAmountChange(controls.reset.toFixed(Math.min(4, opportunity.collateralDecimals ?? 4)))}
+                  className="deposit-preset"
+                  onClick={() => onAmountChange(minimumDeposit.toFixed(Math.min(4, opportunity.collateralDecimals ?? 4)))}
                 >
-                  Reset
+                  Min
                 </button>
-                {controls.steps.map(step => (
+                {[5, 7, 10].map(v => (
                   <button
-                    key={step}
+                    key={v}
                     type="button"
-                    className="stepper-btn"
-                    aria-label={`+${step}`}
-                    onClick={() => {
-                      const next = (validAmount ? parsedAmount : 0) + step
-                      onAmountChange(next.toFixed(Math.min(4, opportunity.collateralDecimals ?? 4)))
-                    }}
+                    className="deposit-preset"
+                    onClick={() => onAmountChange(String(v))}
                   >
-                    +{step}
+                    {v}
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* Position explanation */}
+            {validAmount && borrowedEstimate !== undefined && (
+              <div className="position-explained">
+                <p className="position-explained-title">Your position explained</p>
+                <ul>
+                  <li>You deposit <strong>{parsedAmount.toFixed(2)} {opportunity.tokenSymbol}</strong> as collateral.</li>
+                  {borrowedEstimate > 0 && (
+                    <li>KPK on Gearbox lends you about <strong>{formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
+                  )}
+                  <li>APY and health factor can move after opening.</li>
+                </ul>
+              </div>
+            )}
 
             {/* Alerts */}
             {!isProjectReady && (
@@ -596,6 +591,13 @@ export function TransactionCockpit({
                     </li>
                   )
                 })}
+                <li className="step-card info">
+                  <div className="step-index" aria-hidden="true" />
+                  <div className="step-heading">
+                    <span>Bot protection</span>
+                    <small>Included</small>
+                  </div>
+                </li>
               </ol>
             )}
 
@@ -604,8 +606,9 @@ export function TransactionCockpit({
                 View your active Smart account →
               </button>
             )}
+            </div>{/* end builder-scroll */}
 
-            {/* CTA */}
+            {/* CTA — outside scroll area, always visible */}
             <div className="builder-footer">
               {validAmount && annualYield !== undefined && (
                 <div className="position-preview" aria-label="Position preview">

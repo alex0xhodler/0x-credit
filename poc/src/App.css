@@ -1641,11 +1641,20 @@ button {
   width: 380px;
   flex-shrink: 0;
   padding: clamp(12px, 2vw, 20px);
+  padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.builder-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow-y: auto;
-  min-height: 0;
+  padding-bottom: 12px;
 }
 
 .builder-heading {
@@ -1708,49 +1717,25 @@ button {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
 }
 
-.deposit-presets {
+.deposit-controls {
   display: flex;
   gap: 6px;
 }
 
-.preset-chip {
+.deposit-preset {
   flex: 1;
   padding: 6px 8px;
   border-radius: var(--button-radius);
   border: 1px solid var(--line-strong);
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink-soft);
   cursor: pointer;
   transition: background 140ms, border-color 140ms, color 140ms;
 }
 
-.preset-chip:hover {
-  background: var(--canvas);
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-.deposit-stepper {
-  display: flex;
-  gap: 6px;
-}
-
-.stepper-btn {
-  flex: 1;
-  padding: 5px 4px;
-  border-radius: var(--button-radius);
-  border: 1px solid var(--line);
-  background: transparent;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink-soft);
-  cursor: pointer;
-  transition: background 140ms, border-color 140ms, color 140ms;
-}
-
-.stepper-btn:hover {
+.deposit-preset:hover {
   background: var(--canvas);
   border-color: var(--ink);
   color: var(--ink);
@@ -1860,10 +1845,12 @@ button {
 
 /* Builder footer */
 .builder-footer {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 12px 0 clamp(12px, 2vw, 20px);
+  border-top: 1px solid var(--line);
+  background: var(--paper);
 }
 
 .builder-footer .primary-action {
@@ -1929,6 +1916,9 @@ button {
 
   .cockpit-builder {
     width: 100%;
+  }
+
+  .builder-scroll {
     overflow-y: visible;
   }
 }
@@ -1941,4 +1931,58 @@ button {
   .cockpit-header .brand-row {
     font-size: 1rem;
   }
+}
+
+/* Position explanation block */
+.position-explained {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--paper);
+}
+
+.position-explained-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.position-explained ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.position-explained li {
+  font-size: 13px;
+  color: var(--ink-soft);
+  padding-left: 12px;
+  position: relative;
+}
+
+.position-explained li::before {
+  content: '·';
+  position: absolute;
+  left: 2px;
+  color: var(--primary);
+}
+
+.position-explained li strong {
+  color: var(--ink);
+}
+
+/* Step 3 — informational bot protection row */
+.step-rail .step-card.info {
+  opacity: 0.65;
+}
+
+.step-rail .step-card.info .step-heading small {
+  color: #2d9e5f;
+  font-weight: 600;
 }

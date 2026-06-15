@@ -98,27 +98,17 @@ describe('TransactionCockpit — deposit controls', () => {
     expect(onAmountChange).toHaveBeenCalledWith(expect.stringMatching(/^2\.9/))
   })
 
-  it('calls onAmountChange with a larger amount when a multiplier preset is clicked', () => {
+  it('calls onAmountChange with the preset value when a preset button is clicked', () => {
     const onAmountChange = vi.fn()
     render(<TransactionCockpit {...baseProps} amount="3" onAmountChange={onAmountChange} />)
-    fireEvent.click(screen.getByRole('button', { name: /2×/i }))
-    const called = Number(onAmountChange.mock.calls[0][0])
-    expect(called).toBeGreaterThan(wstEthOpportunity.minimumDeposit)
+    fireEvent.click(screen.getByRole('button', { name: '5' }))
+    expect(onAmountChange).toHaveBeenCalledWith('5')
   })
 
-  it('calls onAmountChange on increment step button click', () => {
-    const onAmountChange = vi.fn()
-    render(<TransactionCockpit {...baseProps} amount="3" onAmountChange={onAmountChange} />)
-    const stepBtns = screen.getAllByRole('button', { name: /^\+/ })
-    fireEvent.click(stepBtns[0])
-    const called = Number(onAmountChange.mock.calls[0][0])
-    expect(called).toBeGreaterThan(3)
-  })
-
-  it('resets amount to min deposit on RESET click', () => {
+  it('calls onAmountChange with min deposit when Min is clicked', () => {
     const onAmountChange = vi.fn()
     render(<TransactionCockpit {...baseProps} amount="10" onAmountChange={onAmountChange} />)
-    fireEvent.click(screen.getByRole('button', { name: /reset/i }))
+    fireEvent.click(screen.getByRole('button', { name: /min/i }))
     expect(onAmountChange).toHaveBeenCalledWith(expect.stringMatching(/^2\.9/))
   })
 })
@@ -132,8 +122,8 @@ describe('TransactionCockpit — position preview', () => {
 
   it('shows borrow estimate derived from numeric leverageMultiple', () => {
     render(<TransactionCockpit {...baseProps} amount="3" />)
-    // borrowed = 3 * (7.6 - 1) = 19.8 wstETH
-    expect(screen.getByText(/19\.\d+\s*wstETH/i)).toBeInTheDocument()
+    // borrowed = 3 * (7.6 - 1) = 19.8 wstETH — appears in position-explained and preview
+    expect(screen.getAllByText(/19\.\d+\s*wstETH/i).length).toBeGreaterThanOrEqual(1)
   })
 })
 
