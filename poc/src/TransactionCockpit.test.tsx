@@ -178,31 +178,32 @@ describe('TransactionCockpit — CTA and execution', () => {
 })
 
 describe('TransactionCockpit — execution step progress', () => {
-  it('shows approve and open steps while executing', () => {
+  it('renders step track with approve, open and protection nodes', () => {
     const steps = createExecutionSteps({ allowance: 0n, amount: 3n, canBatch: false, symbol: 'wstETH' })
     render(<TransactionCockpit {...baseProps} accountStatus="connected" steps={steps} />)
-    expect(screen.getByText('Approve wstETH')).toBeInTheDocument()
-    expect(screen.getByText('Open Smart account')).toBeInTheDocument()
+    expect(screen.getByText('Approve')).toBeInTheDocument()
+    expect(screen.getByText('Open account')).toBeInTheDocument()
+    expect(screen.getByText('Automated protection')).toBeInTheDocument()
   })
 
-  it('collapses a done approve step', () => {
+  it('shows done circle for approve when approve step is done', () => {
     const steps = createExecutionSteps({ allowance: 0n, amount: 3n, canBatch: false, symbol: 'wstETH' })
       .map(s => s.id === 'approve' ? { ...s, status: 'done' as const } : s)
     render(<TransactionCockpit {...baseProps} accountStatus="connected" steps={steps} />)
-    expect(screen.getByText('Approved')).toBeInTheDocument()
-    expect(screen.queryByText('Approve wstETH')).not.toBeInTheDocument()
+    // Protection always shows ✓; done approve adds a second ✓
+    expect(screen.getAllByText('✓').length).toBeGreaterThanOrEqual(2)
   })
 })
 
-describe('TransactionCockpit — APY breakdown', () => {
-  it('shows borrow rate info when borrowRatePercent is provided', () => {
+describe('TransactionCockpit — chart footer', () => {
+  it('shows borrow rate in chart footer when borrowRatePercent is provided', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByText(/borrow rate/i)).toBeInTheDocument()
+    expect(screen.getByText(/borrow\/yr/i)).toBeInTheDocument()
   })
 
-  it('shows base APY component in the breakdown', () => {
+  it('shows base APY in chart footer', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByText(/base apy/i)).toBeInTheDocument()
+    expect(screen.getByText(/^Base$/)).toBeInTheDocument()
   })
 })
 

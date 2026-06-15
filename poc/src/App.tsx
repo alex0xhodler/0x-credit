@@ -71,6 +71,18 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   isExecutable: true,
 }
 
+const MAINNET_WSTETH_STUB: OpportunityView = {
+  id: 'mainnet-wsteth-loading',
+  strategyId: MAINNET_STRATEGY_ID,
+  strategyName: 'WMoo Curve ETH+-WETH',
+  tokenSymbol: 'wstETH',
+  chainName: 'Ethereum',
+  apyLabel: 'APY loading',
+  leverageLabel: 'sweet spot loading',
+  protectionLabel: 'Mainnet strategy',
+  isExecutable: true,
+}
+
 interface StoredOpenPosition {
   address: Address
   creditManager: Address
@@ -277,6 +289,7 @@ function GearboxApp() {
     // }
 
     if (!processOpportunity(mainnetOpportunity, 'mainnet', 'Ethereum', MAINNET_STRATEGY_ID)) {
+      views.push(MAINNET_WSTETH_STUB)
       views.push(MAINNET_WETH_OPPORTUNITY)
     }
     

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Area,
   CartesianGrid,
   ComposedChart,
   Line,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -132,34 +132,19 @@ function formatCompact(value: number, symbol: string): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${symbol}`
 }
 
-function ApyBreakdown({ baseApyPercent, apyPercent, leverageMultiple, borrowRatePercent }: {
-  baseApyPercent: number
-  apyPercent: number
-  leverageMultiple: number
-  borrowRatePercent?: number
-}) {
-  const leverageNetGain = apyPercent - baseApyPercent
-  const total = apyPercent
-  const baseWidth = total > 0 ? (baseApyPercent / total) * 100 : 0
-  const leverageWidth = total > 0 ? (leverageNetGain / total) * 100 : 0
-  const borrowCostPct = borrowRatePercent !== undefined
-    ? (borrowRatePercent * (leverageMultiple - 1)).toFixed(2)
-    : undefined
 
+function ChartSkeleton() {
   return (
-    <div className="apy-breakdown">
-      <div className="breakdown-title">How your yield is built</div>
-      <div className="breakdown-bar">
-        <div className="breakdown-seg base-seg" style={{ width: `${baseWidth}%` }} />
-        <div className="breakdown-seg leverage-seg" style={{ width: `${leverageWidth}%` }} />
-      </div>
-      <div className="breakdown-meta">
-        <span><span className="breakdown-dot base-dot" /> Base APY {baseApyPercent.toFixed(1)}%</span>
-        <span><span className="breakdown-dot leverage-dot" /> Leverage ×{leverageMultiple.toFixed(1)} boost</span>
-        {borrowRatePercent !== undefined && (
-          <span className="breakdown-cost">Borrow rate {borrowRatePercent.toFixed(2)}% · Cost {borrowCostPct}%</span>
-        )}
-      </div>
+    <div className="chart-skeleton">
+      {[0,1,2,3,4].map(i => <div key={i} className="csk-grid" />)}
+      <svg className="csk-path" viewBox="0 0 100 60" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0,54 C18,50 38,42 58,30 S82,17 100,11 L100,60 L0,60 Z"
+              fill="rgba(228,43,12,0.05)" />
+        <path className="csk-curve" d="M0,54 C18,50 38,42 58,30 S82,17 100,11"
+              stroke="rgba(228,43,12,0.22)" strokeWidth="2.5" fill="none"
+              strokeLinecap="round" />
+      </svg>
+      <div className="csk-shimmer" />
     </div>
   )
 }
@@ -176,36 +161,48 @@ function ProjectionChart({ deposit, apyPercent, baseApyPercent, horizon, symbol 
     [deposit, apyPercent, baseApyPercent, horizon],
   )
 
-  // Domain based on amplified + optimistic for top, start just below deposit
   const [yMin, yMax] = useMemo(() => {
     if (!data.length) return [deposit * 0.9, deposit * 2]
     const maxAmp = Math.max(...data.map(d => d.amplified))
-    const maxOpt = Math.max(...data.map(d => d.optimistic))
-    return [deposit * 0.92, Math.max(maxAmp, maxOpt) * 1.06]
+    return [deposit * 0.96, maxAmp * 1.04]
   }, [data, deposit])
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 12, right: 24, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+      <ComposedChart data={data} margin={{ top: 16, right: 20, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="grad-amplified" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E42B0C" stopOpacity={0.22} />
+            <stop offset="100%" stopColor="#E42B0C" stopOpacity={0.01} />
+          </linearGradient>
+          <linearGradient id="grad-plain" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#2457ff" stopOpacity={0.1} />
+            <stop offset="100%" stopColor="#2457ff" stopOpacity={0.0} />
+          </linearGradient>
+        </defs>
+
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+
         <XAxis
           dataKey="month"
           tickFormatter={m => m === 0 ? 'Now' : `${m}m`}
-          tick={{ fontSize: 11, fill: 'rgb(120,120,120)' }}
+          tick={{ fontSize: 11, fill: 'rgb(150,150,150)' }}
           axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
         />
+
         <YAxis
-          tickFormatter={v => `${v.toFixed(1)}`}
-          tick={{ fontSize: 11, fill: 'rgb(120,120,120)' }}
+          tickFormatter={v => v.toFixed(1)}
+          tick={{ fontSize: 11, fill: 'rgb(150,150,150)' }}
           axisLine={false}
           tickLine={false}
-          width={48}
+          width={32}
           domain={[yMin, yMax]}
           allowDataOverflow
-          unit={` ${symbol}`}
+          tickCount={4}
         />
+
         <Tooltip
           content={({ active, payload, label }) => {
             if (!active || !payload?.length) return null
@@ -238,54 +235,29 @@ function ProjectionChart({ deposit, apyPercent, baseApyPercent, horizon, symbol 
           }}
         />
 
-        {/* Deposit reference */}
-        <ReferenceLine
-          y={deposit}
-          stroke="rgba(0,0,0,0.18)"
-          strokeDasharray="4 4"
-        />
-
-        {/* Scenario range: thin dashed envelope lines */}
-        <Line
-          type="monotone"
-          dataKey="optimistic"
-          stroke="rgba(228,43,12,0.22)"
-          strokeWidth={1}
-          strokeDasharray="3 5"
-          dot={false}
-          isAnimationActive={false}
-          legendType="none"
-        />
-        <Line
-          type="monotone"
-          dataKey="pessimistic"
-          stroke="rgba(228,43,12,0.22)"
-          strokeWidth={1}
-          strokeDasharray="3 5"
-          dot={false}
-          isAnimationActive={false}
-          legendType="none"
-        />
-
-        {/* Main trajectories */}
         {baseApyPercent !== undefined && (
-          <Line
+          <Area
             type="monotone"
             dataKey="plain"
-            stroke="#2457ff"
+            stroke="rgba(36,87,255,0.55)"
             strokeWidth={1.5}
             strokeDasharray="5 4"
+            fill="url(#grad-plain)"
             dot={false}
             isAnimationActive={false}
           />
         )}
-        <Line
+
+        <Area
           type="monotone"
           dataKey="amplified"
           stroke="#E42B0C"
           strokeWidth={2.5}
+          fill="url(#grad-amplified)"
           dot={false}
-          isAnimationActive={false}
+          isAnimationActive={true}
+          animationDuration={700}
+          animationEasing="ease-out"
         />
       </ComposedChart>
     </ResponsiveContainer>
@@ -322,6 +294,7 @@ export function TransactionCockpit({
   const canExecute = isConnected && isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
   const canStart = isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
 
+  const isDataLoading = opportunity.apyPercent === undefined
   const apyPercent = opportunity.apyPercent ?? 0
   const baseApyPercent = opportunity.baseApyPercent
   const borrowRatePercent = opportunity.borrowRatePercent
@@ -440,9 +413,10 @@ export function TransactionCockpit({
               >
                 <TokenIcon symbol={opp.tokenSymbol} />
                 <span>{opp.tokenSymbol}</span>
-                {opp.apyPercent !== undefined && (
-                  <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
-                )}
+                {opp.apyPercent !== undefined
+                  ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
+                  : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
+                }
               </button>
             ))}
           </div>
@@ -455,10 +429,11 @@ export function TransactionCockpit({
           <section className="cockpit-chart-pane" aria-label="Projected earnings">
             <div className="chart-header">
               <div>
-                <span className="chart-title">Projected balance</span>
-                {apyPercent > 0 && (
-                  <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
-                )}
+                <span className="chart-title">Projected balance <span className="chart-title-unit">{opportunity.tokenSymbol}</span></span>
+                {isDataLoading
+                  ? <span className="chart-apy-badge chart-apy-badge--loading" aria-hidden="true" />
+                  : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
+                }
               </div>
               <div className="horizon-toggle" role="group" aria-label="Projection horizon">
                 {([1, 3, 5] as Horizon[]).map(y => (
@@ -475,30 +450,39 @@ export function TransactionCockpit({
             </div>
 
             <div className="chart-grow">
-              <ProjectionChart
-                deposit={depositForChart}
-                apyPercent={apyPercent}
-                baseApyPercent={baseApyPercent}
-                horizon={horizon}
-                symbol={opportunity.tokenSymbol}
-              />
+              {isDataLoading
+                ? <ChartSkeleton />
+                : <ProjectionChart
+                    deposit={depositForChart}
+                    apyPercent={apyPercent}
+                    baseApyPercent={baseApyPercent}
+                    horizon={horizon}
+                    symbol={opportunity.tokenSymbol}
+                  />
+              }
             </div>
 
-            {baseApyPercent !== undefined && (
-              <div className="chart-legend">
-                <span className="legend-amplified">━ Amplified ({apyPercent.toFixed(1)}%)</span>
-                <span className="legend-plain">┅ Plain ({baseApyPercent.toFixed(1)}%)</span>
-                <span className="legend-band">░ ±30% scenario range</span>
+            {!isDataLoading && (
+              <div className="chart-footer">
+                <span className="cf-item">
+                  <span className="cf-swatch cf-swatch--amp" />
+                  Amplified <strong>{apyPercent.toFixed(1)}%</strong>
+                </span>
+                {baseApyPercent !== undefined && (
+                  <span className="cf-item">
+                    <span className="cf-swatch cf-swatch--plain" />
+                    Base <strong>{baseApyPercent.toFixed(1)}%</strong>
+                  </span>
+                )}
+                <span className="cf-sep">·</span>
+                <span className="cf-item">×{leverageMultiple.toFixed(1)} leverage</span>
+                {borrowRatePercent !== undefined && (
+                  <>
+                    <span className="cf-sep">·</span>
+                    <span className="cf-item cf-item--cost">{borrowRatePercent.toFixed(2)}% borrow/yr</span>
+                  </>
+                )}
               </div>
-            )}
-
-            {baseApyPercent !== undefined && (
-              <ApyBreakdown
-                baseApyPercent={baseApyPercent}
-                apyPercent={apyPercent}
-                leverageMultiple={leverageMultiple}
-                borrowRatePercent={borrowRatePercent}
-              />
             )}
           </section>
 
@@ -507,21 +491,29 @@ export function TransactionCockpit({
             <div className="builder-scroll">
             <div className="builder-heading">
               <span className="selected-label">Selected strategy</span>
-              <strong className="builder-token">{opportunity.tokenSymbol} · {apyPercent > 0 ? `${apyPercent.toFixed(2)}% APY` : opportunity.apyLabel}</strong>
+              <strong className="builder-token">
+                {opportunity.tokenSymbol}
+                <span className="builder-token-sep"> · </span>
+                {isDataLoading
+                  ? <span className="builder-apy-shimmer" aria-hidden="true" />
+                  : `${apyPercent.toFixed(2)}% APY`
+                }
+              </strong>
               <span className="builder-strategy">{opportunity.strategyName}</span>
             </div>
 
             {/* Deposit input */}
-            <div className="deposit-section">
+            <div className={`deposit-section${isDataLoading ? ' is-loading' : ''}`}>
               <label className="deposit-label" htmlFor="deposit-amount">Deposit amount</label>
               <input
                 id="deposit-amount"
                 aria-label="Deposit amount"
                 className="deposit-input"
                 inputMode="decimal"
-                placeholder="0.00"
+                placeholder={isDataLoading ? '—' : '0.00'}
                 type="text"
                 value={amount}
+                disabled={isDataLoading}
                 onChange={e => onAmountChange(e.target.value)}
               />
 
@@ -569,38 +561,6 @@ export function TransactionCockpit({
             {!routeWarning && opportunity.disabledReason && <p className="alert">{opportunity.disabledReason}</p>}
             {displayError && <p className="alert">{displayError}</p>}
 
-            {/* Execution steps */}
-            {steps.length > 0 && (
-              <ol className="step-rail" aria-label="Execution steps">
-                {steps.map(step => {
-                  const collapsed = isCollapsedApproval(step)
-                  const stepError = step.error ? formatTransactionError(step.error) : undefined
-                  return (
-                    <li key={step.id} className={`step-card ${step.status}${collapsed ? ' compact' : ''}`}>
-                      <div className="step-index" aria-hidden="true" />
-                      <div>
-                        <div className="step-heading">
-                          <span>{collapsed ? 'Approved' : step.label}</span>
-                          <small>{stepStatusLabel(step)}</small>
-                        </div>
-                        {!collapsed && step.status === 'active' && <p>{step.id === 'account' ? `Opening with ${amount} ${opportunity.tokenSymbol}.` : step.detail}</p>}
-                        {!collapsed && step.status === 'active' && step.walletPrompt && <p className="wallet-prompt">{step.walletPrompt}</p>}
-                        {step.txHash && <p className="tx-hash">{step.txHash}</p>}
-                        {stepError && <p className="step-error">{stepError}</p>}
-                      </div>
-                    </li>
-                  )
-                })}
-                <li className="step-card info">
-                  <div className="step-index" aria-hidden="true" />
-                  <div className="step-heading">
-                    <span>Bot protection</span>
-                    <small>Included</small>
-                  </div>
-                </li>
-              </ol>
-            )}
-
             {hasStoredPosition && !positionOpen && onViewPosition && (
               <button type="button" className="view-position-link" onClick={onViewPosition}>
                 View your active Smart account →
@@ -610,6 +570,37 @@ export function TransactionCockpit({
 
             {/* CTA — outside scroll area, always visible */}
             <div className="builder-footer">
+            {/* Horizontal step track */}
+            {(() => {
+              const approveStep = steps.find(s => s.id === 'approve')
+              const accountStep = steps.find(s => s.id === 'account')
+              const approveStatus = approveStep?.status ?? 'waiting'
+              const accountStatus = accountStep?.status ?? 'waiting'
+              const approveDone = approveStatus === 'done'
+              const accountDone = accountStatus === 'done'
+              return (
+                <div className="step-track" aria-label="Execution steps">
+                  <div className={`step-node ${approveStatus}`}>
+                    <div className="step-node-circle">{approveDone ? '✓' : '1'}</div>
+                    <span className="step-node-label">Approve</span>
+                    {approveStatus === 'active' && <span className="step-node-hint">Check wallet</span>}
+                    {approveStep?.error && <span className="step-node-error">{formatTransactionError(approveStep.error)}</span>}
+                  </div>
+                  <div className={`step-connector${approveDone ? ' done' : ''}`} />
+                  <div className={`step-node ${accountStatus}`}>
+                    <div className="step-node-circle">{accountDone ? '✓' : '2'}</div>
+                    <span className="step-node-label">Open account</span>
+                    {accountStatus === 'active' && <span className="step-node-hint">Check wallet</span>}
+                    {accountStep?.error && <span className="step-node-error">{formatTransactionError(accountStep.error)}</span>}
+                  </div>
+                  <div className={`step-connector${accountDone ? ' done' : ''}`} />
+                  <div className="step-node info">
+                    <div className="step-node-circle">✓</div>
+                    <span className="step-node-label">Automated protection</span>
+                  </div>
+                </div>
+              )
+            })()}
               {validAmount && annualYield !== undefined && (
                 <div className="position-preview" aria-label="Position preview">
                   <div className="preview-row">
