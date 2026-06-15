@@ -179,7 +179,7 @@ function GearboxApp() {
     },
   })
 
-  const [amount, setAmount] = useState('1500')
+  const [amount, setAmount] = useState('')
   const [monadOpportunity, setMonadOpportunity] = useState<LoadedGearboxOpportunity>()
   const [mainnetOpportunity, setMainnetOpportunity] = useState<LoadedGearboxOpportunity>()
   const [loadError, setLoadError] = useState<string>()
@@ -338,16 +338,11 @@ function GearboxApp() {
     setHasOpenPosition(hasStoredOpenPosition(address, opportunity.strategyId))
   }, [address, opportunity])
 
-  // Sync amount to a sensible default when the displayed opportunity changes token
+  // Reset amount to minimum deposit whenever the selected opportunity changes
   useEffect(() => {
     if (!displayedOpportunity?.minimumDeposit) return
-    const MIN = displayedOpportunity.minimumDeposit
     const decimals = Math.min(4, displayedOpportunity.collateralDecimals ?? 4)
-    setAmount(prev => {
-      const isStaleDefault = prev === '1500' || prev === '3' || prev === '1.5' || prev === ''
-      if (!isStaleDefault) return prev
-      return (MIN * 2).toFixed(decimals)
-    })
+    setAmount(displayedOpportunity.minimumDeposit.toFixed(decimals))
   }, [displayedOpportunity?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -704,11 +699,6 @@ function GearboxApp() {
         setSelectedOpportunityId(nextOpportunity.id)
         setHasStartedFlow(true)
         setForceNewAccount(true)
-        if (nextOpportunity.id === MAINNET_WETH_OPPORTUNITY_ID || nextOpportunity.id.startsWith('mainnet-')) {
-          setAmount('3')
-        } else if (nextOpportunity.id.startsWith('monad-')) {
-          if (!amount || amount === '1.5' || amount === '3') setAmount('1500')
-        }
       }}
       onResetFlow={() => {
         setHasStartedFlow(false)
