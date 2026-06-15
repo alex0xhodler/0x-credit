@@ -42,10 +42,8 @@ import {
 import {
   DEFAULT_QUOTA_RESERVE_BPS,
   DEFAULT_SLIPPAGE_BPS,
-  type GearboxCreditManagerRoute,
   loadGearboxOpportunity,
   MONAD_CHAIN_ID,
-  STRATEGY_ID,
   MAINNET_CHAIN_ID,
   MAINNET_RPC_URL,
   MAINNET_STRATEGY_ID,
@@ -56,7 +54,6 @@ import { assertSuccessfulReceipt, formatTransactionError } from './lib/gearbox/t
 
 const queryClient = new QueryClient()
 const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
-const MONAD_USDC_OPPORTUNITY_ID = 'monad-usdc-ausdct0'
 const MAINNET_WETH_OPPORTUNITY_ID = 'mainnet-weth-wmoo-curve-eth-weth'
 
 const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
@@ -153,28 +150,6 @@ function supportsAtomicBatch(capabilities: unknown): boolean {
   return atomicRecord.supported === true || atomicRecord.status === 'supported'
 }
 
-function baseOpportunityView(
-  opportunity: LoadedGearboxOpportunity | undefined,
-  selectedRoute: GearboxCreditManagerRoute | undefined,
-): OpportunityView {
-  const apyLabel = selectedRoute
-    ? formatOpportunityApy(selectedRoute.apy)
-    : opportunity?.apyLabel || 'APY loading'
-  const leverageLabel = selectedRoute
-    ? `${(Number(selectedRoute.maxLeverage) / 100).toFixed(2)}x target`
-    : opportunity?.leverageLabel || 'sweet spot loading'
-
-  return {
-    id: MONAD_USDC_OPPORTUNITY_ID,
-    strategyId: STRATEGY_ID,
-    strategyName: opportunity?.strategyName || 'Curve AUSD/USDC/USDT0',
-    tokenSymbol: opportunity?.collateralSymbol || 'USDC',
-    chainName: 'Monad',
-    apyLabel,
-    leverageLabel,
-    protectionLabel: opportunity?.botAddress ? 'Deleverage bot included' : 'Protection bot discovery pending',
-  }
-}
 
 function GearboxApp() {
   const { open } = useAppKit()
@@ -192,9 +167,9 @@ function GearboxApp() {
   })
 
   const [amount, setAmount] = useState('')
-  const [monadOpportunity, setMonadOpportunity] = useState<LoadedGearboxOpportunity>()
+  const [monadOpportunity] = useState<LoadedGearboxOpportunity>()
   const [mainnetOpportunity, setMainnetOpportunity] = useState<LoadedGearboxOpportunity>()
-  const [loadError, setLoadError] = useState<string>()
+  const [loadError] = useState<string>()
   const [executionError, setExecutionError] = useState<string>()
   const [isExecuting, setIsExecuting] = useState(false)
   const [steps, setSteps] = useState<ExecutionStep[]>([])

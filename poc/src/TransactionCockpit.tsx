@@ -3,14 +3,12 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import type { ExecutionStep } from './lib/gearbox/plan'
-import { getDepositControls } from './lib/gearbox/deposit'
 import { buildProjection } from './lib/projection'
 import { formatTransactionError } from './lib/gearbox/transactions'
 
@@ -71,16 +69,6 @@ const POWERED_BY_PARTNERS = [
   { name: 'Curve', logo: 'https://www.gearbox.finance/assets/partners/partner-curve.svg' },
 ] as const
 
-function stepStatusLabel(step: ExecutionStep): string {
-  if (step.status === 'active') return 'In progress'
-  if (step.status === 'done') return 'Done'
-  if (step.status === 'error') return 'Needs attention'
-  return 'Waiting'
-}
-
-function isCollapsedApproval(step: ExecutionStep): boolean {
-  return step.id === 'approve' && step.status === 'done'
-}
 
 function formatPositionValue(value: number, symbol: string): string {
   return `${value.toLocaleString('en-US', {
@@ -208,7 +196,7 @@ function ProjectionChart({ deposit, apyPercent, baseApyPercent, horizon, symbol 
             if (!active || !payload?.length) return null
             const relevant = (payload as unknown as Array<{ dataKey: string; value: number; stroke: string }>)
               .filter(p => p.dataKey === 'amplified' || p.dataKey === 'plain')
-              .sort((a, b) => a.dataKey === 'amplified' ? -1 : 1)
+              .sort((a, _b) => a.dataKey === 'amplified' ? -1 : 1)
             if (!relevant.length) return null
             const m = Number(label)
             const timeLabel = m >= 12
@@ -304,9 +292,7 @@ export function TransactionCockpit({
   const annualYield = validAmount ? parsedAmount * (apyPercent / 100) : undefined
   const borrowedEstimate = validAmount ? Math.max(parsedAmount * (leverageMultiple - 1), 0) : undefined
 
-  const controls = useMemo(() => getDepositControls(minimumDeposit > 0 ? minimumDeposit : 1), [minimumDeposit])
-
-  const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, positionOpen, activePositionStats)
+const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, positionOpen, activePositionStats)
 
   const actionLabel = isConnected
     ? isBusy ? 'Opening Smart account...' : `Earn ${apyPercent.toFixed(2)}%`
