@@ -325,7 +325,7 @@ function GearboxApp() {
     if (!opportunity || !amountRaw || !selectedRoute) return undefined
 
     if (amountRaw < selectedRoute.minimumDepositAmount) {
-      return `Enter at least ${formatTokenAmount(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.03 HF and the strategy minimum debt.`
+      return `Minimum deposit is ${formatTokenAmount(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals)} ${selectedRoute.collateralSymbol} for this strategy.`
     }
     const debt = (amountRaw * (selectedRoute.maxLeverage - 100n)) / 100n
     if (debt < selectedRoute.minDebt || debt > selectedRoute.maxDebt || debt > selectedRoute.availableToBorrow) {
