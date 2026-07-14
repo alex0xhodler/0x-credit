@@ -21,7 +21,7 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { TransactionCockpit, type OpportunityView, type ActivePositionStats } from './TransactionCockpit'
+import { TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type TopbarVariant } from './TransactionCockpit'
 import {
   config,
   isReownProjectConfigured,
@@ -51,10 +51,13 @@ import {
 } from './lib/gearbox/live'
 import { prepareOpenStrategyTx } from './lib/gearbox/sdkAdapter'
 import { assertSuccessfulReceipt, formatTransactionError } from './lib/gearbox/transactions'
+import { routeProvenanceForStrategy } from './lib/routeProvenance'
 
 const queryClient = new QueryClient()
 const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
 const MAINNET_WETH_OPPORTUNITY_ID = 'mainnet-weth-wmoo-curve-eth-weth'
+const HEADER_VARIANTS: HeaderVariant[] = ['desk', 'journey', 'ticket', 'editorial']
+const TOPBAR_VARIANTS: TopbarVariant[] = ['identity', 'shelf', 'switchboard', 'portfolio']
 
 const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   id: MAINNET_WETH_OPPORTUNITY_ID,
@@ -66,6 +69,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
 }
 
 const MAINNET_WSTETH_STUB: OpportunityView = {
@@ -78,6 +82,7 @@ const MAINNET_WSTETH_STUB: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
 }
 
 interface StoredOpenPosition {
@@ -152,6 +157,14 @@ function supportsAtomicBatch(capabilities: unknown): boolean {
 
 
 function GearboxApp() {
+  const requestedHeaderVariant = new URLSearchParams(window.location.search).get('header')
+  const headerVariant = HEADER_VARIANTS.includes(requestedHeaderVariant as HeaderVariant)
+    ? requestedHeaderVariant as HeaderVariant
+    : 'editorial'
+  const requestedTopbarVariant = new URLSearchParams(window.location.search).get('topbar')
+  const topbarVariant = TOPBAR_VARIANTS.includes(requestedTopbarVariant as TopbarVariant)
+    ? requestedTopbarVariant as TopbarVariant
+    : 'shelf'
   const { open } = useAppKit()
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -250,10 +263,11 @@ function GearboxApp() {
           isExecutable: true,
           apyPercent: route.apy !== undefined ? route.apy / 10_000 : undefined,
           baseApyPercent: route.baseApy !== undefined ? route.baseApy / 10_000 : undefined,
-          borrowRatePercent: route.baseBorrowRate / 10_000,
+          borrowRatePercent: route.totalBorrowRate / 10_000,
           leverageMultiple: Number(route.maxLeverage) / 100,
           minimumDeposit: Number(route.minimumDepositAmount) / Math.pow(10, route.collateralDecimals),
           collateralDecimals: route.collateralDecimals,
+          routeSteps: routeProvenanceForStrategy(defaultStrategyId, chainName),
         })
       })
       return true
@@ -269,7 +283,7 @@ function GearboxApp() {
     }
     
     return views
-  }, [monadOpportunity, mainnetOpportunity])
+  }, [mainnetOpportunity])
 
   useEffect(() => {
     // if (monadOpportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
@@ -665,6 +679,8 @@ function GearboxApp() {
       opportunities={opportunityViews}
       manageUrl={manageUrl}
       hasStoredPosition={hasOpenPosition}
+      headerVariant={headerVariant}
+      topbarVariant={topbarVariant}
       onViewPosition={() => {
         setForceNewAccount(false)
         setHasStartedFlow(true)

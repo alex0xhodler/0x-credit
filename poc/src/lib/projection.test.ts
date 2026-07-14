@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildProjection } from './projection'
+import { buildProjection, buildYieldComparisonProjection } from './projection'
+import { buildBalanceTimeline } from './comparisonTimeline'
 
 describe('buildProjection', () => {
   it('starts at the deposit amount at month 0', () => {
@@ -62,5 +63,43 @@ describe('buildProjection', () => {
     const points = buildProjection({ deposit: 5, apyPercent: 50, years: 3 })
     expect(points[0].pessimistic).toBeCloseTo(5, 5)
     expect(points[0].band).toBeCloseTo(0, 5)
+  })
+
+  it('normalizes every forward comparison to the same ETH-equivalent starting value', () => {
+    const points = buildYieldComparisonProjection({
+      months: 1,
+      series: [
+        { id: 'strategy', apyPercent: 24 },
+        { id: 'weth', apyPercent: 0 },
+        { id: 'lst', apyPercent: 3 },
+      ],
+    })
+
+    expect(points[0]).toMatchObject({ month: 0, strategy: 1, weth: 1, lst: 1 })
+    const last = points[points.length - 1]
+    expect(last?.strategy).toBeGreaterThan(last?.lst ?? 0)
+    expect(last?.lst).toBeGreaterThan(last?.weth ?? 0)
+  })
+
+  it('uses daily points for one month and monthly points for longer periods', () => {
+    const series = [{ id: 'strategy', apyPercent: 10 }]
+
+    expect(buildYieldComparisonProjection({ months: 1, series })).toHaveLength(31)
+    expect(buildYieldComparisonProjection({ months: 6, series })).toHaveLength(7)
+    expect(buildYieldComparisonProjection({ months: 12, series })).toHaveLength(13)
+  })
+
+  it('continues a minimum-deposit history into the forward half of the chart', () => {
+    const points = buildBalanceTimeline({
+      startingBalance: 2.92,
+      strategyApyPercent: 12,
+      horizon: 1,
+      benchmarks: [],
+      now: Date.UTC(2026, 6, 13),
+    })
+
+    expect(points[0]).toMatchObject({ time: -30, weth: 2.92 })
+    expect(points.find(point => point.time === 0)?.weth).toBeCloseTo(2.92, 8)
+    expect(points[points.length - 1]).toMatchObject({ time: 30, weth: 2.92 })
   })
 })

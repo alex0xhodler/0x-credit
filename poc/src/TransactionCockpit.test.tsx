@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { TransactionCockpit } from './TransactionCockpit'
 import { createExecutionSteps } from './lib/gearbox/plan'
@@ -20,6 +20,11 @@ const wstEthOpportunity = {
   leverageMultiple: 7.6,
   minimumDeposit: 2.92,
   collateralDecimals: 18,
+  routeSteps: [
+    { role: 'Manager', provider: 'KPK' },
+    { role: 'Protocol', provider: 'Gearbox' },
+    { role: 'Pool', provider: 'Beefy on Curve' },
+  ],
 }
 
 const wethOpportunity = {
@@ -57,9 +62,9 @@ const baseProps = {
 }
 
 describe('TransactionCockpit — cockpit layout', () => {
-  it('renders the brand and a strategy tab for each opportunity', () => {
+  it('renders the compact brand cue and a strategy tab for each opportunity', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByText('0x.credit')).toBeInTheDocument()
+    expect(screen.getByLabelText('0x.credit')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /wsteth/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /weth/i })).toBeInTheDocument()
   })
@@ -77,17 +82,91 @@ describe('TransactionCockpit — cockpit layout', () => {
     expect(onSelectOpportunity).toHaveBeenCalledWith(wethOpportunity)
   })
 
+  it('ties explicit route provenance to the selected strategy instead of global partner branding', () => {
+    render(<TransactionCockpit {...baseProps} />)
+
+    expect(screen.getByRole('heading', { level: 1, name: /automated yield strategies/i })).toBeInTheDocument()
+    const route = screen.getByLabelText(/strategy route/i)
+    expect(within(route).getByText(/you deposit: wstETH/i)).toBeInTheDocument()
+    expect(within(route).getByText(/manager: kpk/i)).toBeInTheDocument()
+    expect(within(route).getByText(/protocol: gearbox/i)).toBeInTheDocument()
+    expect(within(route).getByText(/pool: beefy on curve/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/route partners/i)).not.toBeInTheDocument()
+  })
+
+  it('does not invent provenance when the selected opportunity has none', () => {
+    render(<TransactionCockpit {...baseProps} opportunity={wethOpportunity} />)
+
+    expect(screen.queryByLabelText(/strategy route/i)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['desk', 'Strategy selection'],
+    ['journey', 'How your position works'],
+    ['ticket', 'Strategy ticket'],
+    ['editorial', 'Selected yield strategy'],
+  ] as const)('renders the %s header experiment as a usable strategy selector', (headerVariant, label) => {
+    render(<TransactionCockpit {...baseProps} headerVariant={headerVariant} topbarVariant="identity" />)
+
+    expect(screen.getByRole('banner', { name: label })).toBeInTheDocument()
+    expect(screen.getByRole('tablist', { name: /strategy/i })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['identity', 'Strategy selection'],
+    ['shelf', 'Strategy shelf'],
+    ['switchboard', 'Strategy switchboard'],
+    ['portfolio', 'Portfolio strategy selection'],
+  ] as const)('renders the %s top-strip experiment with working strategy tabs', (topbarVariant, label) => {
+    render(<TransactionCockpit {...baseProps} headerVariant="desk" topbarVariant={topbarVariant} />)
+
+    expect(screen.getByRole('banner', { name: label })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /wsteth/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /weth/i })).toBeInTheDocument()
+  })
+
+  it('uses roving focus and arrow keys for strategy selection', () => {
+    const onSelectOpportunity = vi.fn()
+    render(<TransactionCockpit {...baseProps} onSelectOpportunity={onSelectOpportunity} />)
+
+    const selectedTab = screen.getByRole('tab', { name: /wsteth/i })
+    const nextTab = screen.getByRole('tab', { name: /weth/i })
+    const panel = screen.getByRole('tabpanel')
+
+    expect(selectedTab).toHaveAttribute('tabindex', '0')
+    expect(nextTab).toHaveAttribute('tabindex', '-1')
+    expect(selectedTab).toHaveAttribute('aria-controls', panel.id)
+    expect(panel).toHaveAttribute('aria-labelledby', selectedTab.id)
+
+    selectedTab.focus()
+    fireEvent.keyDown(selectedTab, { key: 'ArrowRight' })
+
+    expect(nextTab).toHaveFocus()
+    expect(onSelectOpportunity).toHaveBeenCalledWith(wethOpportunity)
+  })
+
+  it('supports Home and End keys in the strategy selector', () => {
+    const onSelectOpportunity = vi.fn()
+    render(<TransactionCockpit {...baseProps} onSelectOpportunity={onSelectOpportunity} />)
+
+    const firstTab = screen.getByRole('tab', { name: /wsteth/i })
+    const lastTab = screen.getByRole('tab', { name: /weth/i })
+
+    firstTab.focus()
+    fireEvent.keyDown(firstTab, { key: 'End' })
+    expect(lastTab).toHaveFocus()
+    expect(onSelectOpportunity).toHaveBeenLastCalledWith(wethOpportunity)
+
+    fireEvent.keyDown(lastTab, { key: 'Home' })
+    expect(firstTab).toHaveFocus()
+    expect(onSelectOpportunity).toHaveBeenLastCalledWith(wstEthOpportunity)
+  })
+
   it('renders the deposit input with the current amount', () => {
     render(<TransactionCockpit {...baseProps} />)
     expect(screen.getByLabelText(/deposit amount/i)).toHaveValue('3')
   })
 
-  it('renders the "powered by" footer', () => {
-    render(<TransactionCockpit {...baseProps} />)
-    const footer = screen.getByRole('contentinfo')
-    expect(within(footer).getByRole('img', { name: 'Gearbox' })).toBeInTheDocument()
-    expect(within(footer).getByRole('img', { name: 'Beefy' })).toBeInTheDocument()
-  })
 })
 
 describe('TransactionCockpit — deposit controls', () => {
@@ -196,14 +275,35 @@ describe('TransactionCockpit — execution step progress', () => {
 })
 
 describe('TransactionCockpit — chart footer', () => {
-  it('shows borrow rate in chart footer when borrowRatePercent is provided', () => {
+  it('uses the selected net strategy APY in one historical-to-projection comparison chart', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByText(/borrow\/yr/i)).toBeInTheDocument()
+
+    expect(screen.getByLabelText(/historical benchmark rates and future yield projection/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Benchmark APY history$/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/net strategy/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Base$/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/borrow\/yr/i)).not.toBeInTheDocument()
   })
 
-  it('shows base APY in chart footer', () => {
+  it('uses 1 month, 6 months, and 1 year periods instead of multi-year horizons', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByText(/^Base$/)).toBeInTheDocument()
+
+    expect(screen.getByRole('radio', { name: /1 month/i })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /6 months/i })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /1 year/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '3Y' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the chart free of explanatory implementation copy while deposits update', () => {
+    vi.useFakeTimers()
+    const view = render(<TransactionCockpit {...baseProps} amount="2.924" />)
+
+    expect(screen.queryByText(/based on .*historical pool apy/i)).not.toBeInTheDocument()
+
+    view.rerender(<TransactionCockpit {...baseProps} amount="5" />)
+    act(() => vi.advanceTimersByTime(300))
+    expect(screen.queryByText(/based on .*historical pool apy/i)).not.toBeInTheDocument()
+    vi.useRealTimers()
   })
 })
 

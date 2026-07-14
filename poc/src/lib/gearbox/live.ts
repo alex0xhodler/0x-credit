@@ -97,6 +97,7 @@ export interface GearboxCreditManagerRoute {
   availableToBorrow: bigint
   baseBorrowRate: number
   baseQuotaRateWithFee: bigint
+  totalBorrowRate: number
   collateralToken: Address
   collateralSymbol: string
   collateralDecimals: number
@@ -153,6 +154,19 @@ export function selectBestCreditManagerForAmount(
   })
 
   return [...compatible].sort(compareCreditManagerRoutes)[0]
+}
+
+export function calculateEffectiveBorrowRate({
+  baseBorrowRate,
+  feeInterest,
+  quotaRateWithFee,
+}: {
+  baseBorrowRate: number
+  feeInterest: number
+  quotaRateWithFee: number
+}): number {
+  const baseRateWithFee = Math.floor((baseBorrowRate * (10_000 + feeInterest)) / 10_000)
+  return baseRateWithFee + quotaRateWithFee
 }
 
 function compareCreditManagerRoutes(a: GearboxCreditManagerRoute, b: GearboxCreditManagerRoute): number {
@@ -247,12 +261,17 @@ async function createGearboxOpportunity(options: LoadOpportunityOptions): Promis
     const minDebt = cmSuite.creditFacade.minDebt ?? cm.minDebt ?? 0n
     const maxDebt = cmSuite.creditFacade.maxDebt ?? cm.maxDebt ?? 0n
     const baseQuotaRateWithFee = getSingleQuotaRateWithFee(cm, resolvedStrategy.tokenOutAddress)
+    const totalBorrowRate = calculateEffectiveBorrowRate({
+      baseBorrowRate: cm.baseBorrowRate,
+      feeInterest: cm.feeInterest,
+      quotaRateWithFee: Number(baseQuotaRateWithFee),
+    })
     const adjustedApy = targetTokenApy === undefined || !info
       ? info?.maxAPY
       : calculateApyForLeverage({
           collateralApy: targetTokenApy,
           leverage: maxLeverage,
-          baseRateWithFee: cm.baseBorrowRate,
+          baseRateWithFee: totalBorrowRate - Number(baseQuotaRateWithFee),
           quotaRateWithFee: Number(baseQuotaRateWithFee),
           bonusApy: info.bonusAPY?.value,
         })
@@ -268,6 +287,7 @@ async function createGearboxOpportunity(options: LoadOpportunityOptions): Promis
       availableToBorrow: cm.availableToBorrow,
       baseBorrowRate: cm.baseBorrowRate,
       baseQuotaRateWithFee,
+      totalBorrowRate,
       collateralToken,
       collateralSymbol,
       collateralDecimals,
