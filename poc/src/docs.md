@@ -12,8 +12,8 @@ Path: @/poc/src
 
 - `App.tsx` is the application root mounted by `@/poc/src/main.tsx`. It composes Wagmi, React Query, and Reown AppKit providers around `GearboxApp`.
 - `GearboxApp` calls `loadGearboxOpportunity` from `@/poc/src/lib/gearbox/live.ts` to fetch on-chain strategy data for both Monad and Ethereum Mainnet chains.
-- `opportunityViews` (the list passed to `TransactionCockpit`) is derived inside `App.tsx` by iterating `LoadedGearboxOpportunity.creditManagers` and mapping each `GearboxCreditManagerRoute` to an `OpportunityView` with numeric fields (`apyPercent`, `baseApyPercent`, `borrowRatePercent`, `leverageMultiple`, `minimumDeposit`).
-- `TransactionCockpit.tsx` calls `buildProjection` from `@/poc/src/lib/projection.ts` for chart data and `getDepositControls` from `@/poc/src/lib/gearbox/deposit.ts` for preset/stepper values.
+- `opportunityViews` (the list passed to `TransactionCockpit`) is derived inside `App.tsx` by iterating `LoadedGearboxOpportunity.creditManagers` and mapping each `GearboxCreditManagerRoute` to an `OpportunityView` with numeric fields (`apyPercent`, `baseApyPercent`, `borrowRatePercent`, `leverageMultiple`, `minimumDeposit`). Each view may also carry structured, selected-route-specific `routeSteps` provenance.
+- `TransactionCockpit.tsx` loads the pinned Ethereum yield benchmarks through `@/poc/src/lib/defillamaYields.ts` and passes them, together with the selected route’s net APY, to `buildBalanceTimeline` in `@/poc/src/lib/comparisonTimeline.ts`.
 - Execution logic (approve + open credit account) lives entirely in `App.tsx`; `TransactionCockpit` surfaces progress via the `steps: ExecutionStep[]` prop, sourced from `@/poc/src/lib/gearbox/plan.ts`.
 - CSS design tokens and all layout rules live in `App.css`; the cockpit layout classes (`.cockpit-wrap`, `.cockpit-body`, `.cockpit-chart-pane`, `.cockpit-builder`) are defined there.
 
@@ -36,31 +36,33 @@ The component has two render branches:
 
 ```
 cockpit-wrap
-├── cockpit-hero         (tagline)
+├── h1.sr-only           (Automated yield strategies)
 ├── cockpit (main card)
-│   ├── cockpit-header   (brand + strategy-tabs + w3m-button)
+│   ├── cockpit-header   (brand + strategy-tabs)
 │   └── cockpit-body
 │       ├── cockpit-chart-pane
-│       │   ├── ProjectionChart  (recharts ComposedChart)
+│       │   ├── route-summary (selected-route provenance, when supplied)
+│       │   ├── YieldComparisonChart  (Recharts continuous history + projection)
 │       │   ├── chart-legend
-│       │   └── ApyBreakdown
 │       └── cockpit-builder
 │           ├── deposit input + preset chips + stepper
 │           ├── position-preview card
 │           ├── alerts / route warnings
 │           ├── step-rail (execution steps)
 │           └── primary-action button
-└── cockpit-footer       (powered-by logos)
 ```
 
-- `ProjectionChart` renders an amplified trajectory, an optional plain (unlevered) trajectory, and a ±30% scenario envelope as dashed lines. Y-axis domain is computed from the amplified + optimistic series only, not from the `band` stacking value.
-- `ApyBreakdown` renders a proportional bar showing base APY vs. leverage gain, plus a borrow-cost annotation. It receives numeric props and performs no string parsing.
+- `YieldComparisonChart` renders one continuous ETH-equivalent balance timeline: historical APY compounds up to `Now`, and the same series then project forward from their current rates. It compares the selected route’s net APY, Lido stETH, and holding WETH at 0%.
+- The comparison period control is a `role="radiogroup"` with 1M, 6M, and 1Y choices; the default is 6M. The chart baseline follows the entered deposit (or the minimum deposit fallback) after a 300 ms debounce, preventing a redraw for every keystroke.
+- Benchmark fetching is best-effort and abortable. When it is unavailable, the chart still renders the selected route and the flat WETH comparison; unavailable benchmark series are omitted.
 - Strategy selector is a persistent `role="tablist"` tab bar in the header. Switching tabs calls `onSelectOpportunity`, which in `App.tsx` resets execution error, sets `forceNewAccount`, and updates `amount` to a chain-appropriate default.
+- When present, `OpportunityView.routeSteps` is rendered as a compact route summary beside the projection rather than as global partner branding; every displayed provider is paired with its operational role.
 
 ### Things to Know
 
-- `OpportunityView` carries both human-readable label strings (for fallback rendering during load) and numeric fields (`apyPercent`, `baseApyPercent`, etc.) that the cockpit uses for all computation. The numeric fields are `undefined` while the opportunity is loading.
-- The `depositForChart` fallback (`minimumDeposit || 1`) ensures the chart renders something meaningful even before the user enters an amount.
+- `OpportunityView` carries both human-readable label strings (for fallback rendering during load) and numeric fields (`apyPercent`, `baseApyPercent`, etc.) that the cockpit uses for all computation. It can also carry optional `routeSteps: readonly { role, provider }[]`; absent steps intentionally produce no provenance UI. The numeric fields are `undefined` while the opportunity is loading.
+- The chart uses `minimumDeposit || 1` before there is a valid entered amount. All series are rebased to that common ETH-equivalent balance, so the visual compares yield paths rather than token-denominated prices.
+- The displayed selected-strategy APY is the route’s net APY after its complete effective borrowing cost; this is calculated in `lib/gearbox/live.ts`, not recomputed in the chart.
 - `isCollapsedApproval` collapses the approve step visually once it is done, to reduce noise during the account-open step.
 - `useSimulatedPositionValue` uses a 2-second polling interval and respects `prefers-reduced-motion` — the ticker freezes when reduced motion is set.
 - `manageUrl` is only set when `hasStartedFlow && hasOpenPosition && !forceNewAccount`. `forceNewAccount` is set to `true` when the user switches strategy tabs or explicitly resets the flow, which brings the cockpit back into deposit mode even when a position exists.

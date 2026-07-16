@@ -1,15 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import {
-  Area,
   CartesianGrid,
-  ComposedChart,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
 import type { ExecutionStep } from './lib/gearbox/plan'
-import { buildProjection } from './lib/projection'
+import { loadEthereumYieldBenchmarks, type YieldBenchmark } from './lib/defillamaYields'
+import { buildBalanceTimeline, type ComparisonHorizon } from './lib/comparisonTimeline'
+import { orderedComparisonTooltipRows } from './lib/chartTooltip'
 import { formatTransactionError } from './lib/gearbox/transactions'
 
 export interface OpportunityView {
@@ -30,6 +33,12 @@ export interface OpportunityView {
   leverageMultiple?: number
   minimumDeposit?: number
   collateralDecimals?: number
+  routeSteps?: readonly RouteStep[]
+}
+
+export interface RouteStep {
+  role: string
+  provider: string
 }
 
 export interface ActivePositionStats {
@@ -37,6 +46,9 @@ export interface ActivePositionStats {
   debt: number
   netValue: number
 }
+
+export type HeaderVariant = 'desk' | 'journey' | 'ticket' | 'editorial'
+export type TopbarVariant = 'identity' | 'shelf' | 'switchboard' | 'portfolio'
 
 export interface TransactionCockpitProps {
   amount: string
@@ -58,17 +70,11 @@ export interface TransactionCockpitProps {
   hasStoredPosition?: boolean
   onViewPosition?(): void
   activePositionStats?: ActivePositionStats
+  headerVariant?: HeaderVariant
+  topbarVariant?: TopbarVariant
 }
 
-type Horizon = 1 | 3 | 5
-
-const POWERED_BY_PARTNERS = [
-  { name: 'Gearbox', logo: '/powered-by/gearbox.webp' },
-  { name: 'KPK', logo: '/powered-by/kpk.svg' },
-  { name: 'Beefy', logo: '/powered-by/beefy.svg' },
-  { name: 'Curve', logo: 'https://www.gearbox.finance/assets/partners/partner-curve.svg' },
-] as const
-
+type Horizon = ComparisonHorizon
 
 function formatPositionValue(value: number, symbol: string): string {
   return `${value.toLocaleString('en-US', {
@@ -97,6 +103,17 @@ function useSimulatedPositionValue(amount: string, apyPercent: number, active: b
   const yearlyYield = baseAmount * (apyPercent / 100)
   const elapsedYearFraction = elapsedMs / (365 * 24 * 60 * 60 * 1000)
   return baseAmount + yearlyYield * elapsedYearFraction
+}
+
+function useDebouncedNumber(value: number, delayMs: number): number {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedValue(value), delayMs)
+    return () => window.clearTimeout(timeout)
+  }, [value, delayMs])
+
+  return debouncedValue
 }
 
 function TokenIcon({ symbol }: { symbol: string }) {
@@ -137,117 +154,78 @@ function ChartSkeleton() {
   )
 }
 
-function ProjectionChart({ deposit, apyPercent, baseApyPercent, horizon, symbol }: {
-  deposit: number
-  apyPercent: number
-  baseApyPercent?: number
-  horizon: Horizon
-  symbol: string
-}) {
-  const data = useMemo(
-    () => buildProjection({ deposit, apyPercent, baseApyPercent, years: horizon }),
-    [deposit, apyPercent, baseApyPercent, horizon],
-  )
+const comparisonSeries = [
+  { id: 'strategy', label: 'Net strategy', color: '#E42B0C', dash: undefined },
+  { id: 'weth', label: 'Hold WETH', color: '#737373', dash: '3 4' },
+  { id: 'lst', label: 'LST · stETH', color: '#2457ff', dash: undefined },
+] as const
 
-  const [yMin, yMax] = useMemo(() => {
-    if (!data.length) return [deposit * 0.9, deposit * 2]
-    const maxAmp = Math.max(...data.map(d => d.amplified))
-    return [deposit * 0.96, maxAmp * 1.04]
-  }, [data, deposit])
+function useEthereumYieldBenchmarks() {
+  const [benchmarks, setBenchmarks] = useState<YieldBenchmark[]>([])
+  const [fetchedAt, setFetchedAt] = useState<Date>()
+
+  useEffect(() => {
+    const controller = new AbortController()
+    loadEthereumYieldBenchmarks(controller.signal)
+      .then(result => {
+        setBenchmarks(result)
+        setFetchedAt(new Date())
+      })
+      .catch(error => {
+        if (error instanceof DOMException && error.name === 'AbortError') return
+        setBenchmarks([])
+        setFetchedAt(undefined)
+      })
+    return () => controller.abort()
+  }, [])
+
+  return { benchmarks, fetchedAt }
+}
+
+function YieldComparisonChart({ startingBalance, apyPercent, benchmarks, horizon }: { startingBalance: number; apyPercent: number; benchmarks: readonly YieldBenchmark[]; horizon: Horizon }) {
+  const data = useMemo(() => buildBalanceTimeline({ startingBalance, strategyApyPercent: apyPercent, benchmarks, horizon }), [startingBalance, apyPercent, benchmarks, horizon])
+  const projectionSeries = [
+    { id: 'strategy', apyPercent },
+    ...benchmarks.filter(benchmark => benchmark.id !== 'strategyBase').map(benchmark => ({ id: benchmark.id, apyPercent: benchmark.apyPercent })),
+  ]
+  const spanDays = horizon * 30
 
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={data} margin={{ top: 16, right: 20, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="grad-amplified" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#E42B0C" stopOpacity={0.22} />
-            <stop offset="100%" stopColor="#E42B0C" stopOpacity={0.01} />
-          </linearGradient>
-          <linearGradient id="grad-plain" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#2457ff" stopOpacity={0.1} />
-            <stop offset="100%" stopColor="#2457ff" stopOpacity={0.0} />
-          </linearGradient>
-        </defs>
-
+      <LineChart data={data} margin={{ top: 10, right: 4, left: 4, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
-
-        <XAxis
-          dataKey="month"
-          tickFormatter={m => m === 0 ? 'Now' : `${m}m`}
-          tick={{ fontSize: 11, fill: 'rgb(150,150,150)' }}
-          axisLine={false}
-          tickLine={false}
-          interval="preserveStartEnd"
-        />
-
-        <YAxis
-          tickFormatter={v => v.toFixed(1)}
-          tick={{ fontSize: 11, fill: 'rgb(150,150,150)' }}
-          axisLine={false}
-          tickLine={false}
-          width={32}
-          domain={[yMin, yMax]}
-          allowDataOverflow
-          tickCount={4}
-        />
-
-        <Tooltip
-          content={({ active, payload, label }) => {
-            if (!active || !payload?.length) return null
-            const relevant = (payload as unknown as Array<{ dataKey: string; value: number; stroke: string }>)
-              .filter(p => p.dataKey === 'amplified' || p.dataKey === 'plain')
-              .sort((a, _b) => a.dataKey === 'amplified' ? -1 : 1)
-            if (!relevant.length) return null
-            const m = Number(label)
-            const timeLabel = m >= 12
-              ? `${Math.floor(m / 12)}Y${m % 12 ? ` ${m % 12}m` : ''}`
-              : `Month ${m}`
-            return (
-              <div className="chart-tooltip">
-                <div className="tooltip-time">{timeLabel}</div>
-                {relevant.map(p => {
-                  const val = Number(p.value)
-                  const pctGain = deposit > 0 ? ((val / deposit - 1) * 100) : 0
-                  return (
-                    <div key={p.dataKey} className="tooltip-row" style={{ color: p.stroke }}>
-                      {p.dataKey === 'amplified' ? '↑ Amplified' : '→ Plain'}{' '}
-                      <strong>{val.toFixed(3)} {symbol}</strong>
-                      {pctGain > 0.5 && (
-                        <span className="tooltip-gain"> +{pctGain.toFixed(0)}%</span>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          }}
-        />
-
-        {baseApyPercent !== undefined && (
-          <Area
-            type="monotone"
-            dataKey="plain"
-            stroke="rgba(36,87,255,0.55)"
-            strokeWidth={1.5}
-            strokeDasharray="5 4"
-            fill="url(#grad-plain)"
-            dot={false}
-            isAnimationActive={false}
-          />
-        )}
-
-        <Area
-          type="monotone"
-          dataKey="amplified"
-          stroke="#E42B0C"
-          strokeWidth={2.5}
-          fill="url(#grad-amplified)"
-          dot={false}
-          isAnimationActive={true}
-          animationDuration={700}
-          animationEasing="ease-out"
-        />
-      </ComposedChart>
+        <XAxis dataKey="time" type="number" domain={[-spanDays, spanDays]} ticks={[-spanDays, 0, spanDays]} tickFormatter={value => value === 0 ? 'Now' : value < 0 ? `Past ${horizon === 1 ? '1M' : `${horizon}M`}` : horizon === 12 ? 'Potential 1Y' : `Potential ${horizon}M`} tick={{ fontSize: 10, fill: 'rgb(150,150,150)' }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={value => Number(value).toFixed(2)} tick={{ fontSize: 10, fill: 'rgb(150,150,150)' }} axisLine={false} tickLine={false} width={38} domain={['auto', 'auto']} />
+        <ReferenceLine x={0} stroke="rgba(0,0,0,0.18)" strokeWidth={1} />
+        <Tooltip content={({ active, payload, label }) => {
+          if (!active || !payload?.length) return null
+          const future = Number(label) >= 0
+          const values = Object.fromEntries(payload.map(point => [String(point.dataKey), Number(point.value)]))
+          const rows = orderedComparisonTooltipRows(values)
+          const days = Math.abs(Number(label))
+          const timeLabel = days === 0 ? 'Now' : `${Math.round(days / 30)} month${days >= 45 ? 's' : ''} ${future ? 'ahead' : 'ago'}`
+          return (
+            <div className="chart-tooltip chart-tooltip--comparison">
+              <div className="tooltip-time">{timeLabel}</div>
+              <div className="tooltip-context">{future ? 'If today’s rates held · projected balance' : 'Historical APY compounded from your deposit'}</div>
+              {rows.map(row => (
+                <div key={row.id} className={`tooltip-comparison-row tooltip-comparison-row--${row.id}`}>
+                  <span className="tooltip-series" style={{ '--series-color': row.color } as CSSProperties}>
+                    <b>{!future && row.id === 'strategy' ? 'Strategy base · Beefy' : row.label}</b>
+                    <small>{!future && row.id === 'strategy' ? 'Underlying pool APY · before leverage' : row.detail}</small>
+                  </span>
+                  <span className="tooltip-value"><strong>{row.value.toFixed(3)}</strong>{row.id !== 'weth' && <em>{row.deltaFromWeth >= 0 ? '+' : ''}{row.deltaFromWeth.toFixed(3)} vs hold</em>}</span>
+                </div>
+              ))}
+            </div>
+          )
+        }} />
+        <Line type="monotone" dataKey="weth" name="Hold WETH" stroke="#737373" strokeWidth={1.25} strokeDasharray="3 4" dot={false} isAnimationActive={false} />
+        {projectionSeries.map(item => {
+          const config = comparisonSeries.find(candidate => candidate.id === item.id)
+          return config && <Line key={item.id} type="monotone" dataKey={item.id} name={config.label} stroke={config.color} strokeWidth={item.id === 'strategy' ? 2.4 : 1.6} strokeDasharray={config.dash} dot={false} isAnimationActive={item.id === 'strategy'} animationDuration={500} />
+        })}
+      </LineChart>
     </ResponsiveContainer>
   )
 }
@@ -271,8 +249,14 @@ export function TransactionCockpit({
   hasStoredPosition,
   onViewPosition,
   activePositionStats,
+  headerVariant = 'editorial',
+  topbarVariant = 'shelf',
 }: TransactionCockpitProps) {
-  const [horizon, setHorizon] = useState<Horizon>(1)
+  const [horizon, setHorizon] = useState<Horizon>(6)
+  const pageHeadingId = useId()
+  const strategyPanelId = useId()
+  const strategyTabListId = useId()
+  const strategyTabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const isConnected = accountStatus === 'connected'
   const positionOpen = Boolean(manageUrl)
   const canUseOpportunity = opportunity.isExecutable !== false
@@ -284,10 +268,30 @@ export function TransactionCockpit({
 
   const isDataLoading = opportunity.apyPercent === undefined
   const apyPercent = opportunity.apyPercent ?? 0
-  const baseApyPercent = opportunity.baseApyPercent
-  const borrowRatePercent = opportunity.borrowRatePercent
   const leverageMultiple = opportunity.leverageMultiple ?? 1
   const minimumDeposit = opportunity.minimumDeposit ?? 0
+  const requestedChartBalance = validAmount ? parsedAmount : minimumDeposit || 1
+  const chartStartingBalance = useDebouncedNumber(requestedChartBalance, 300)
+  const { benchmarks, fetchedAt } = useEthereumYieldBenchmarks()
+  const selectedOpportunityIndex = Math.max(opportunities.findIndex(item => item.id === opportunity.id), 0)
+  const headerLabel = {
+    desk: 'Strategy selection',
+    journey: 'How your position works',
+    ticket: 'Strategy ticket',
+    editorial: 'Selected yield strategy',
+  }[headerVariant]
+  const topbarLabel = {
+    identity: 'Product navigation',
+    shelf: 'Strategy shelf',
+    switchboard: 'Strategy switchboard',
+    portfolio: 'Portfolio strategy selection',
+  }[topbarVariant]
+  const chartTitle = {
+    desk: 'Projected balance',
+    journey: 'Your projected outcome',
+    ticket: 'Projected return',
+    editorial: `${opportunity.tokenSymbol} amplified loop`,
+  }[headerVariant]
 
   const annualYield = validAmount ? parsedAmount * (apyPercent / 100) : undefined
   const borrowedEstimate = validAmount ? Math.max(parsedAmount * (leverageMultiple - 1), 0) : undefined
@@ -299,6 +303,26 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
     : 'Start earning'
 
   const displayError = error ? formatTransactionError(error) : undefined
+
+  const selectStrategyAt = (index: number) => {
+    const nextOpportunity = opportunities[index]
+    if (!nextOpportunity) return
+    onSelectOpportunity?.(nextOpportunity)
+    strategyTabRefs.current[index]?.focus()
+  }
+
+  const handleStrategyKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | undefined
+
+    if (event.key === 'ArrowRight') nextIndex = (index + 1) % opportunities.length
+    if (event.key === 'ArrowLeft') nextIndex = (index - 1 + opportunities.length) % opportunities.length
+    if (event.key === 'Home') nextIndex = 0
+    if (event.key === 'End') nextIndex = opportunities.length - 1
+    if (nextIndex === undefined) return
+
+    event.preventDefault()
+    selectStrategyAt(nextIndex)
+  }
 
   const positionAnnualYield = useMemo(() => {
     const base = activePositionStats ? activePositionStats.netValue : parsedAmount
@@ -369,32 +393,39 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
     )
   }
 
-  const depositForChart = validAmount ? parsedAmount : minimumDeposit || 1
-
   // ── Cockpit ──────────────────────────────────────────────────────────────
   return (
     <div className="cockpit-wrap">
-      {/* Small hero */}
-      <div className="cockpit-hero">
-        <p className="cockpit-tagline">Earn amplified yields on auto-pilot</p>
-      </div>
+      <h1 className="sr-only" id={pageHeadingId}>Automated yield strategies</h1>
 
-      <main className="cockpit">
-        {/* Header row: brand + tabs + wallet */}
-        <header className="cockpit-header">
-          <div className="brand-row">
+      <main aria-labelledby={pageHeadingId} className={`cockpit cockpit--variant-${headerVariant} cockpit--topbar-${topbarVariant}`}>
+        <header aria-label={topbarVariant === 'identity' ? headerLabel : topbarLabel} className="cockpit-header">
+          <div aria-label="0x.credit" className="brand-row">
             <span className="brand-mark" aria-hidden="true">0x</span>
-            <span>0x.credit</span>
           </div>
 
-          <div role="tablist" aria-label="Strategy" className="strategy-tabs">
-            {opportunities.map(opp => (
+          <div className="header-context" aria-hidden="true">
+            {topbarVariant === 'identity' && <span>Yield strategies</span>}
+            {topbarVariant === 'shelf' && <span>Choose a strategy</span>}
+            {topbarVariant === 'switchboard' && <span>Automated ETH yield</span>}
+            {topbarVariant === 'portfolio' && <span>Portfolio allocation</span>}
+          </div>
+
+          <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
+            {opportunities.map((opp, index) => (
               <button
+                aria-controls={strategyPanelId}
+                aria-selected={opp.id === opportunity.id}
+                id={`${strategyTabListId}-tab-${index}`}
                 key={opp.id}
                 role="tab"
-                aria-selected={opp.id === opportunity.id}
                 className={`strategy-tab ${chainTone(opp.chainName)} ${opp.id === opportunity.id ? 'active' : ''}`}
                 onClick={() => onSelectOpportunity?.(opp)}
+                onKeyDown={event => handleStrategyKeyDown(event, index)}
+                ref={element => {
+                  strategyTabRefs.current[index] = element
+                }}
+                tabIndex={opp.id === opportunity.id ? 0 : -1}
                 type="button"
               >
                 <TokenIcon symbol={opp.tokenSymbol} />
@@ -410,41 +441,65 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
         </header>
 
         {/* Two-pane body */}
-        <div className="cockpit-body">
+        <div
+          aria-labelledby={`${strategyTabListId}-tab-${selectedOpportunityIndex}`}
+          className="cockpit-body"
+          id={strategyPanelId}
+          role="tabpanel"
+        >
           {/* Left: projection chart + APY breakdown */}
           <section className="cockpit-chart-pane" aria-label="Projected earnings">
             <div className="chart-header">
               <div>
-                <span className="chart-title">Projected balance <span className="chart-title-unit">{opportunity.tokenSymbol}</span></span>
+                <span className="chart-title">{chartTitle} <span className="chart-title-unit">{headerVariant === 'editorial' ? 'estimated' : opportunity.tokenSymbol}</span></span>
                 {isDataLoading
                   ? <span className="chart-apy-badge chart-apy-badge--loading" aria-hidden="true" />
                   : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
                 }
               </div>
-              <div className="horizon-toggle" role="group" aria-label="Projection horizon">
-                {([1, 3, 5] as Horizon[]).map(y => (
+              <div className="horizon-toggle" role="radiogroup" aria-label="Comparison period">
+                {([
+                  [1, '1M', '1 month'],
+                  [6, '6M', '6 months'],
+                  [12, '1Y', '1 year'],
+                ] as const).map(([months, label, accessibleLabel]) => (
                   <button
-                    key={y}
+                    key={months}
+                    aria-checked={horizon === months}
+                    aria-label={accessibleLabel}
+                    role="radio"
                     type="button"
-                    className={`horizon-btn ${horizon === y ? 'active' : ''}`}
-                    onClick={() => setHorizon(y)}
+                    className={`horizon-btn ${horizon === months ? 'active' : ''}`}
+                    onClick={() => setHorizon(months)}
                   >
-                    {y}Y
+                    {label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="chart-grow">
+            {headerVariant === 'journey' ? (
+              <div aria-label="Strategy route" className="route-journey">
+                <span><small>Deposit</small>{opportunity.tokenSymbol}</span>
+                <i aria-hidden="true">→</i>
+                <span><small>Credit account</small>Gearbox</span>
+                <i aria-hidden="true">→</i>
+                <span><small>Outcome</small>Amplified position</span>
+              </div>
+            ) : opportunity.routeSteps?.length ? (
+              <div aria-label="Strategy route" className="route-summary">
+                <span className="route-summary-label">Route</span>
+                <span>You deposit: {opportunity.tokenSymbol}</span>
+                {opportunity.routeSteps.map(step => (
+                  <span key={`${step.role}-${step.provider}`}>{step.role}: {step.provider}</span>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="chart-grow chart-comparison" aria-label="Historical benchmark rates and future yield projection">
               {isDataLoading
                 ? <ChartSkeleton />
-                : <ProjectionChart
-                    deposit={depositForChart}
-                    apyPercent={apyPercent}
-                    baseApyPercent={baseApyPercent}
-                    horizon={horizon}
-                    symbol={opportunity.tokenSymbol}
-                  />
+                : <YieldComparisonChart startingBalance={chartStartingBalance} apyPercent={apyPercent} benchmarks={benchmarks} horizon={horizon} />
               }
             </div>
 
@@ -452,22 +507,16 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
               <div className="chart-footer">
                 <span className="cf-item">
                   <span className="cf-swatch cf-swatch--amp" />
-                  Amplified <strong>{apyPercent.toFixed(1)}%</strong>
+                  Net strategy <strong>{apyPercent.toFixed(1)}%</strong>
                 </span>
-                {baseApyPercent !== undefined && (
-                  <span className="cf-item">
-                    <span className="cf-swatch cf-swatch--plain" />
-                    Base <strong>{baseApyPercent.toFixed(1)}%</strong>
-                  </span>
-                )}
-                <span className="cf-sep">·</span>
-                <span className="cf-item">×{leverageMultiple.toFixed(1)} leverage</span>
-                {borrowRatePercent !== undefined && (
-                  <>
-                    <span className="cf-sep">·</span>
-                    <span className="cf-item cf-item--cost">{borrowRatePercent.toFixed(2)}% borrow/yr</span>
-                  </>
-                )}
+                <span className="cf-item"><span className="cf-swatch cf-swatch--weth" />Hold WETH <strong>0.0%</strong></span>
+                {benchmarks.filter(benchmark => benchmark.id !== 'strategyBase').map(benchmark => {
+                  const style = comparisonSeries.find(item => item.id === benchmark.id)
+                  return <span className="cf-item" key={benchmark.id}><span className={`cf-swatch cf-swatch--${benchmark.id}`} />{style?.label} <strong>{benchmark.apyPercent.toFixed(1)}%</strong></span>
+                })}
+                <span className="cf-source">
+                  {fetchedAt ? `DefiLlama benchmarks · fetched ${fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'DefiLlama benchmarks loading…'}
+                </span>
               </div>
             )}
           </section>
@@ -600,13 +649,6 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                       <strong className="preview-yield">{annualYield.toFixed(2)} {opportunity.tokenSymbol} / year</strong>
                     </span>
                   </div>
-                  {borrowedEstimate !== undefined && borrowedEstimate > 0 && (
-                    <div className="preview-meta">
-                      <span>Leverage ×{leverageMultiple.toFixed(1)}</span>
-                      <span>·</span>
-                      <span>Borrows {formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</span>
-                    </div>
-                  )}
                 </div>
               )}
               {actionButton}
@@ -614,18 +656,6 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
           </section>
         </div>
       </main>
-
-      {/* Footer: powered by */}
-      <footer className="cockpit-footer" role="contentinfo">
-        <span>Powered by</span>
-        <div className="powered-by-logos">
-          {POWERED_BY_PARTNERS.map(partner => (
-            <span className="powered-by-logo" key={partner.name}>
-              <img alt={partner.name} src={partner.logo} />
-            </span>
-          ))}
-        </div>
-      </footer>
     </div>
   )
 }

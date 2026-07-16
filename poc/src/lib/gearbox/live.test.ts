@@ -1,6 +1,11 @@
 import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { GEARBOX_APY_URL, resolveGearboxApyUrl, selectBestCreditManagerForAmount } from './live'
+import {
+  GEARBOX_APY_URL,
+  calculateEffectiveBorrowRate,
+  resolveGearboxApyUrl,
+  selectBestCreditManagerForAmount,
+} from './live'
 
 function cm(overrides: {
   address: Address
@@ -21,6 +26,7 @@ function cm(overrides: {
     availableToBorrow: overrides.availableToBorrow ?? 1_000_000_000_000n,
     baseBorrowRate: 10_000,
     baseQuotaRateWithFee: 0n,
+    totalBorrowRate: 10_000,
     collateralToken: '0x0000000000000000000000000000000000000000' as Address,
     collateralSymbol: 'USDC',
     collateralDecimals: 6,
@@ -64,5 +70,14 @@ describe('Gearbox live opportunity selection', () => {
       cm({ address: lowerApy, apy: 18_00, minDebt: 3_000_000_000n }),
       cm({ address: higherApy, apy: 20_00, minDebt: 10_000_000_000n }),
     ], 2_000_000_000n)?.address).toBe(higherApy)
+  })
+
+  it('includes the interest fee and quota in the effective borrowing cost', () => {
+    // Live wstETH route: 1.1997% base, 20% fee, and 0.18% quota.
+    expect(calculateEffectiveBorrowRate({
+      baseBorrowRate: 11_997,
+      feeInterest: 2_000,
+      quotaRateWithFee: 1_800,
+    })).toBe(16_196)
   })
 })
