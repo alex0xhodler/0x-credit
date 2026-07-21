@@ -122,3 +122,34 @@ describe('assessPosition', () => {
     expect(pe?.requiresApproval).toBe(true)
   })
 })
+
+describe('assessPosition — zero debt (B5 root fix)', () => {
+  it('emits no reduce_weight proposal and no NaN/Infinity anywhere under the NVDA earnings signal with zero debt', () => {
+    const a = assessPosition(baseState({ debts: [], signals: [earningsSignal()] }))
+
+    expect(a.healthFactor).toBe(Infinity)
+    expect(a.proposals.some(p => p.kind === 'reduce_weight')).toBe(false)
+    expect(a.proposals.some(p => p.kind === 'refinance_stablecoin')).toBe(false)
+
+    for (const proposal of a.proposals) {
+      // provider_diversify is HF-neutral, so projectedHf legitimately mirrors
+      // the current (Infinity, zero-debt) HF — only NaN is disallowed.
+      expect(Number.isNaN(proposal.projectedHf)).toBe(false)
+      expect(Number.isNaN(proposal.projectedHfDelta)).toBe(false)
+    }
+  })
+
+  it('still proposes provider diversification with zero debt, HF-neutral', () => {
+    const concentrated = baseState({
+      debts: [],
+      collateral: [pos(token('0xbnvda', NVDA.id), 40_000), pos(token('0xbspy', SPY.id), 60_000)],
+    })
+    const a = assessPosition(concentrated)
+
+    expect(a.healthFactor).toBe(Infinity)
+    const diversify = a.proposals.find(p => p.kind === 'provider_diversify' && p.underlyingId === NVDA.id)
+    expect(diversify).toBeDefined()
+    expect(diversify!.projectedHfDelta).toBe(0)
+    expect(Number.isNaN(diversify!.projectedHf)).toBe(false)
+  })
+})

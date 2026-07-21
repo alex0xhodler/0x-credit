@@ -11,7 +11,13 @@ import {
   HERO_UNDERLYINGS,
   HERO_USDE_PRICE,
 } from '../lib/advisor/fixtures/heroScenario'
-import { buildCollateralFromIntent, buildDebtsFromIntent, maxBorrowUsd, type IntentConfig } from '../lib/advisor/onboarding/intent'
+import {
+  buildCollateralFromDeposits,
+  buildDebtsFromIntent,
+  derivedTargetWeights,
+  maxBorrowUsd,
+  type IntentConfig,
+} from '../lib/advisor/onboarding/intent'
 import type { CollateralPosition, DebtPosition, UnderlyingId } from '../lib/advisor/types'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
@@ -129,6 +135,7 @@ function ProposalCard({
   const bodyId = `proposal-body-${proposal.id}`
   const delta = projectedHf - currentHf
   const isUp = delta >= 0
+  const deltaFinite = Number.isFinite(currentHf) && Number.isFinite(projectedHf)
 
   return (
     <article
@@ -172,11 +179,14 @@ function ProposalCard({
           )}
           <div className="advisor-proposal-footer">
             <span className="advisor-proposal-projection">
-              Projected HF <strong data-testid="projected-hf">{projectedHf.toFixed(3)}</strong>{' '}
-              <span className={isUp ? 'advisor-delta-up' : 'advisor-delta-down'}>
-                ({isUp ? '+' : ''}
-                {delta.toFixed(3)})
-              </span>
+              Projected HF{' '}
+              <strong data-testid="projected-hf">{Number.isFinite(projectedHf) ? projectedHf.toFixed(3) : '∞'}</strong>{' '}
+              {deltaFinite && (
+                <span className={isUp ? 'advisor-delta-up' : 'advisor-delta-down'}>
+                  ({isUp ? '+' : ''}
+                  {delta.toFixed(3)})
+                </span>
+              )}
             </span>
             <div className="advisor-proposal-actions">
               <button type="button" className="advisor-btn advisor-btn--ghost" onClick={onDismiss}>
@@ -210,7 +220,7 @@ export interface DashboardProps {
  */
 export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: DashboardProps) {
   const [collateral, setCollateral] = useState<readonly CollateralPosition[]>(() =>
-    buildCollateralFromIntent(intent.weights, intent.totalCollateralUsd),
+    buildCollateralFromDeposits(intent.deposits),
   )
   const [debts, setDebts] = useState<readonly DebtPosition[]>(() => buildDebtsFromIntent(intent.borrows))
   const [reflexiveMode, setReflexiveMode] = useState(false)
@@ -218,11 +228,12 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
   const [editedWeights, setEditedWeights] = useState<Record<string, number>>({})
   const [appliedCount, setAppliedCount] = useState(0)
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => {
+    const targetWeights = derivedTargetWeights(intent.deposits)
     const initialAssessment = assessPosition({
-      collateral: buildCollateralFromIntent(intent.weights, intent.totalCollateralUsd),
+      collateral: buildCollateralFromDeposits(intent.deposits),
       debts: buildDebtsFromIntent(intent.borrows),
       underlyings: HERO_UNDERLYINGS,
-      targetWeights: intent.weights,
+      targetWeights,
       market: MARKET,
       signals: HERO_SIGNALS,
       interventionHf: intent.interventionHf,
@@ -241,19 +252,21 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     [collateral, reflexiveMode],
   )
 
+  const targetWeights = useMemo(() => derivedTargetWeights(intent.deposits), [intent.deposits])
+
   const assessment = useMemo(
     () =>
       assessPosition({
         collateral: effectiveCollateral,
         debts,
         underlyings: HERO_UNDERLYINGS,
-        targetWeights: intent.weights,
+        targetWeights,
         market: MARKET,
         signals: HERO_SIGNALS,
         interventionHf: intent.interventionHf,
         stablecoinBackings: reflexiveMode ? REFLEXIVE_BACKINGS : undefined,
       }),
-    [effectiveCollateral, debts, reflexiveMode, intent.weights, intent.interventionHf],
+    [effectiveCollateral, debts, reflexiveMode, targetWeights, intent.interventionHf],
   )
 
   const visibleProposals = assessment.proposals.filter(p => !handledIds.has(p.id))
@@ -419,7 +432,9 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
         <div className="advisor-stat-tile">
           <span className="advisor-overline">Total borrowed</span>
           <span className="advisor-stat-value">{formatUsd(totalBorrowed)}</span>
-          <span className="advisor-stat-subline">Blended {(blendedApr * 100).toFixed(1)}% APR</span>
+          <span className="advisor-stat-subline">
+            {totalBorrowed === 0 ? '—' : `Blended ${(blendedApr * 100).toFixed(1)}% APR`}
+          </span>
         </div>
         <div className="advisor-stat-tile">
           <span className="advisor-overline">Borrow capacity</span>
@@ -492,9 +507,12 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
           <section className="advisor-rail-panel" data-testid="borrow-panel">
             <span className="advisor-overline">Borrow</span>
-            {debts
-              .filter(d => d.amount > 0)
-              .map(d => (
+            {(() => {
+              const outstanding = debts.filter(d => d.amount > 0)
+              if (outstanding.length === 0) {
+                return <p className="advisor-rail-empty">No borrow outstanding</p>
+              }
+              return outstanding.map(d => (
                 <div key={d.stablecoin} className="advisor-borrow-row">
                   <span className="advisor-borrow-coin">{d.stablecoin}</span>
                   <span className="advisor-borrow-amount">{formatUsd(d.amount * d.priceUsd)}</span>
@@ -503,7 +521,8 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
                   <span className="advisor-borrow-apr">{(HERO_BORROW_APR[d.stablecoin] * 100).toFixed(1)}% APR</span>
                   {d.stablecoin === 'USDe' && <span className="advisor-peg-badge">Peg ${HERO_USDE_PRICE.toFixed(3)}</span>}
                 </div>
-              ))}
+              ))
+            })()}
           </section>
 
           <section className="advisor-rail-panel" data-testid="signals-panel">

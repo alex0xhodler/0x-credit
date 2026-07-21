@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AdvisorApp } from './AdvisorApp'
-import { DEFAULT_INTENT, maxBorrowUsd, projectIntentHf, buildCollateralFromIntent } from '../lib/advisor/onboarding/intent'
+import { DEFAULT_INTENT, maxBorrowUsd, projectIntentHf, buildCollateralFromDeposits } from '../lib/advisor/onboarding/intent'
 import { HERO_NOW, HERO_UNDERLYINGS } from '../lib/advisor/fixtures/heroScenario'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
@@ -85,13 +85,12 @@ describe('Onboarding — step 2 borrow', () => {
   })
 
   it('flags the private-equity minimum HF rule when borrow stays under capacity but HF drops below 1.50', () => {
-    const weights = DEFAULT_INTENT.weights
-    const totalUsd = DEFAULT_INTENT.totalCollateralUsd
+    const deposits = DEFAULT_INTENT.deposits
     const borrows = [{ stablecoin: 'USDC' as const, amountUsd: 6_500_000 }]
 
-    const capacity = maxBorrowUsd(buildCollateralFromIntent(weights, totalUsd), HERO_UNDERLYINGS, MARKET)
+    const capacity = maxBorrowUsd(buildCollateralFromDeposits(deposits), HERO_UNDERLYINGS, MARKET)
     expect(6_500_000).toBeLessThan(capacity)
-    const projected = projectIntentHf(weights, totalUsd, borrows)
+    const projected = projectIntentHf(deposits, borrows)
     expect(projected.healthFactor).toBeLessThan(1.5)
 
     renderApp()

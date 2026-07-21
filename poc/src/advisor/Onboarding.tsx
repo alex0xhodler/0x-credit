@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import {
-  buildCollateralFromIntent,
+  buildCollateralFromDeposits,
   buildDebtsFromIntent,
   DEFAULT_INTENT,
+  derivedTargetWeights,
   maxBorrowUsd,
   projectIntentHf,
+  totalDepositsUsd,
   validateIntent,
   type IntentBorrow,
   type IntentConfig,
@@ -114,10 +116,25 @@ function parseUsdInput(raw: string): number {
   return digits ? Number(digits) : 0
 }
 
+/**
+ * Recovers step-1's local percent-slider representation from a confirmed
+ * intent's deposits (e.g. when Reconfigure prefills the wizard).
+ */
 function initialWeightPercents(config?: IntentConfig): Record<UnderlyingId, number> {
-  const source = config?.weights ?? DEFAULT_INTENT.weights
+  const deposits = config?.deposits ?? DEFAULT_INTENT.deposits
+  const total = totalDepositsUsd(deposits)
   const out: Record<UnderlyingId, number> = {}
-  for (const id of UNDERLYING_ORDER) out[id] = Math.round((source[id] ?? 0) * 100)
+  for (const id of UNDERLYING_ORDER) out[id] = total === 0 ? 0 : Math.round(((deposits[id] ?? 0) / total) * 100)
+  return out
+}
+
+/** Converts step-1's local percent sliders into per-underlying deposit amounts against the entered collateral total. */
+function depositsFromWeightPercents(
+  weightPercents: Record<UnderlyingId, number>,
+  totalUsd: number,
+): Record<UnderlyingId, number> {
+  const out: Record<UnderlyingId, number> = {}
+  for (const id of UNDERLYING_ORDER) out[id] = ((weightPercents[id] ?? 0) / 100) * totalUsd
   return out
 }
 
@@ -589,7 +606,7 @@ function Step4Review({
           ))}
           <div className="advisor-review-row">
             <span>Blended APR</span>
-            <span>{(blendedApr * 100).toFixed(1)}%</span>
+            <span>{totalBorrowUsd === 0 ? '—' : `${(blendedApr * 100).toFixed(1)}%`}</span>
           </div>
         </div>
         <div className="advisor-review-column">
@@ -619,10 +636,12 @@ function Step4Review({
                     .join(', ')}
                 </p>
               )}
-              <span className={`advisor-hf-delta-pill${topProposal.projectedHfDelta >= 0 ? ' is-up' : ' is-down'}`}>
-                {topProposal.projectedHfDelta >= 0 ? '+' : ''}
-                {topProposal.projectedHfDelta.toFixed(3)} HF
-              </span>
+              {Number.isFinite(topProposal.projectedHfDelta) && (
+                <span className={`advisor-hf-delta-pill${topProposal.projectedHfDelta >= 0 ? ' is-up' : ' is-down'}`}>
+                  {topProposal.projectedHfDelta >= 0 ? '+' : ''}
+                  {topProposal.projectedHfDelta.toFixed(3)} HF
+                </span>
+              )}
             </div>
             <p className="advisor-preview-caption">
               This proposal will be waiting for you after activation. Nothing executes without your approval.
@@ -664,9 +683,11 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
   const [weightPercents, setWeightPercents] = useState<Record<UnderlyingId, number>>(() =>
     initialWeightPercents(initialConfig),
   )
-  const [collateralUsd, setCollateralUsd] = useState(initialConfig?.totalCollateralUsd ?? DEFAULT_INTENT.totalCollateralUsd)
+  const [collateralUsd, setCollateralUsd] = useState(() =>
+    totalDepositsUsd(initialConfig?.deposits ?? DEFAULT_INTENT.deposits),
+  )
   const [collateralInput, setCollateralInput] = useState(() =>
-    formatUsd(initialConfig?.totalCollateralUsd ?? DEFAULT_INTENT.totalCollateralUsd),
+    formatUsd(totalDepositsUsd(initialConfig?.deposits ?? DEFAULT_INTENT.deposits)),
   )
   const [borrowState, setBorrowState] = useState<Record<Stablecoin, BorrowCardState>>(() =>
     initialBorrowState(initialConfig),
@@ -685,11 +706,14 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
 
   const weightTotal = UNDERLYING_ORDER.reduce((acc, id) => acc + (weightPercents[id] ?? 0), 0)
 
-  const weightsFraction = useMemo(() => {
-    const out: Record<UnderlyingId, number> = {}
-    for (const id of UNDERLYING_ORDER) out[id] = (weightPercents[id] ?? 0) / 100
-    return out
-  }, [weightPercents])
+  // Step 1 keeps its existing percent-slider UI; deposits are derived from it
+  // locally rather than the wizard operating on the deposits API directly
+  // (Pass C2 rebuilds this screen around deposits — this pass is compile-only).
+  const deposits = useMemo(
+    () => depositsFromWeightPercents(weightPercents, collateralUsd),
+    [weightPercents, collateralUsd],
+  )
+  const targetWeights = useMemo(() => derivedTargetWeights(deposits), [deposits])
 
   const borrows: IntentBorrow[] = useMemo(
     () =>
@@ -702,23 +726,19 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
 
   const config: IntentConfig = useMemo(
     () => ({
-      totalCollateralUsd: collateralUsd,
-      weights: weightsFraction,
+      deposits,
       borrows,
       mode,
       permissions,
       interventionHf,
     }),
-    [collateralUsd, weightsFraction, borrows, mode, permissions, interventionHf],
+    [deposits, borrows, mode, permissions, interventionHf],
   )
 
-  const collateral = useMemo(() => buildCollateralFromIntent(weightsFraction, collateralUsd), [weightsFraction, collateralUsd])
+  const collateral = useMemo(() => buildCollateralFromDeposits(deposits), [deposits])
   const capacity = useMemo(() => maxBorrowUsd(collateral, HERO_UNDERLYINGS, MARKET), [collateral])
   const totalBorrowUsd = borrows.reduce((acc, b) => acc + b.amountUsd, 0)
-  const projected = useMemo(
-    () => projectIntentHf(weightsFraction, collateralUsd, borrows),
-    [weightsFraction, collateralUsd, borrows],
-  )
+  const projected = useMemo(() => projectIntentHf(deposits, borrows), [deposits, borrows])
   const validation = useMemo(() => validateIntent(config), [config])
 
   const assessment = useMemo(
@@ -727,12 +747,12 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
         collateral,
         debts: buildDebtsFromIntent(borrows),
         underlyings: HERO_UNDERLYINGS,
-        targetWeights: weightsFraction,
+        targetWeights,
         market: MARKET,
         signals: HERO_SIGNALS,
         interventionHf,
       }),
-    [collateral, borrows, weightsFraction, interventionHf],
+    [collateral, borrows, targetWeights, interventionHf],
   )
 
   const setWeight = (id: UnderlyingId, value: number) => {

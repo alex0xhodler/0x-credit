@@ -185,46 +185,52 @@ export function assessPosition(state: PositionState): Assessment {
   const isPrivateEquity = (id: UnderlyingId) => state.underlyings[id]?.tier === 'private_equity'
 
   const proposals: Proposal[] = []
+  const hasDebt = result.effectiveDebtUsd > 0
 
   // Signal-driven de-risk: trim an underlying under strong risk-off pressure and
-  // rotate into the safest co-held underlying.
-  for (const [id, underlying] of Object.entries(state.underlyings) as [UnderlyingId, Underlying][]) {
-    const relevant = signalsForAsset(state.signals, id, market.now)
-    const score = weightedRiskScore(relevant)
-    if (score < STRONG_SIGNAL) continue
+  // rotate into the safest co-held underlying. HF-protection only makes sense
+  // against outstanding debt — with zero debt, HF is Infinity and any
+  // "projected HF" for this action would be undefined (Infinity/NaN), so the
+  // loop does not run at all.
+  if (hasDebt) {
+    for (const [id, underlying] of Object.entries(state.underlyings) as [UnderlyingId, Underlying][]) {
+      const relevant = signalsForAsset(state.signals, id, market.now)
+      const score = weightedRiskScore(relevant)
+      if (score < STRONG_SIGNAL) continue
 
-    const into = safestOtherUnderlying(id, thresholds)
-    if (into === undefined || rawTotal === 0) continue
+      const into = safestOtherUnderlying(id, thresholds)
+      if (into === undefined || rawTotal === 0) continue
 
-    const currentWeight = underlyingRawValueUsd(state.collateral, id) / rawTotal
-    if (currentWeight === 0) continue
-    const reduction = Math.min(score * MAX_SIGNAL_REDUCTION, currentWeight)
-    const toWeight = currentWeight - reduction
-    const valueUsd = reduction * rawTotal
+      const currentWeight = underlyingRawValueUsd(state.collateral, id) / rawTotal
+      if (currentWeight === 0) continue
+      const reduction = Math.min(score * MAX_SIGNAL_REDUCTION, currentWeight)
+      const toWeight = currentWeight - reduction
+      const valueUsd = reduction * rawTotal
 
-    const mutated = rotateExposure(state.collateral, id, into, valueUsd)
-    const projected = computeHealthFactor({
-      collateral: mutated,
-      debts: state.debts,
-      underlyings: state.underlyings,
-      market,
-    })
+      const mutated = rotateExposure(state.collateral, id, into, valueUsd)
+      const projected = computeHealthFactor({
+        collateral: mutated,
+        debts: state.debts,
+        underlyings: state.underlyings,
+        market,
+      })
 
-    proposals.push({
-      id: `reduce_weight:${id}`,
-      kind: 'reduce_weight',
-      underlyingId: id,
-      params: { fromWeight: currentWeight, toWeight, intoUnderlyingId: into, valueUsd },
-      rationale:
-        `Risk-off signals on ${underlying.symbol} (score ${score.toFixed(2)}). ` +
-        `Reduce ${underlying.symbol} from ${(currentWeight * 100).toFixed(0)}% to ` +
-        `${(toWeight * 100).toFixed(0)}%, rotating into ${state.underlyings[into].symbol}.`,
-      contributingSignals: relevant.map(f => f.feedId),
-      projectedHf: projected.healthFactor,
-      projectedHfDelta: projected.healthFactor - result.healthFactor,
-      urgency: status === 'healthy' ? 'medium' : 'high',
-      requiresApproval: isPrivateEquity(id),
-    })
+      proposals.push({
+        id: `reduce_weight:${id}`,
+        kind: 'reduce_weight',
+        underlyingId: id,
+        params: { fromWeight: currentWeight, toWeight, intoUnderlyingId: into, valueUsd },
+        rationale:
+          `Risk-off signals on ${underlying.symbol} (score ${score.toFixed(2)}). ` +
+          `Reduce ${underlying.symbol} from ${(currentWeight * 100).toFixed(0)}% to ` +
+          `${(toWeight * 100).toFixed(0)}%, rotating into ${state.underlyings[into].symbol}.`,
+        contributingSignals: relevant.map(f => f.feedId),
+        projectedHf: projected.healthFactor,
+        projectedHfDelta: projected.healthFactor - result.healthFactor,
+        urgency: status === 'healthy' ? 'medium' : 'high',
+        requiresApproval: isPrivateEquity(id),
+      })
+    }
   }
 
   // Provider concentration → diversification (HF-neutral in v1; routing selects
@@ -250,41 +256,44 @@ export function assessPosition(state: PositionState): Assessment {
   }
 
   // Reflexive loop → refinance the affected stablecoin into USDC to break the
-  // shared issuer dependency between collateral and borrowed liability.
-  const reflexiveIssuers = new Set(reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer))
-  const affectedStablecoins = new Set<Stablecoin>(
-    backings.filter(b => reflexiveIssuers.has(b.issuer)).map(b => b.stablecoin),
-  )
-  for (const stablecoin of affectedStablecoins) {
-    if (stablecoin === 'USDC') continue
-    const owedUsd = state.debts
-      .filter(d => d.stablecoin === stablecoin)
-      .reduce((acc, d) => acc + d.amount * d.priceUsd, 0)
-    if (owedUsd === 0) continue
+  // shared issuer dependency between collateral and borrowed liability. Only
+  // meaningful with outstanding debt — see the reduce_weight loop above.
+  if (hasDebt) {
+    const reflexiveIssuers = new Set(reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer))
+    const affectedStablecoins = new Set<Stablecoin>(
+      backings.filter(b => reflexiveIssuers.has(b.issuer)).map(b => b.stablecoin),
+    )
+    for (const stablecoin of affectedStablecoins) {
+      if (stablecoin === 'USDC') continue
+      const owedUsd = state.debts
+        .filter(d => d.stablecoin === stablecoin)
+        .reduce((acc, d) => acc + d.amount * d.priceUsd, 0)
+      if (owedUsd === 0) continue
 
-    const mutated = applyRefinance(state.debts, stablecoin, 'USDC')
-    const projected = computeHealthFactor({
-      collateral: state.collateral,
-      debts: mutated,
-      underlyings: state.underlyings,
-      market,
-    })
-    const issuers = reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer).join(', ')
+      const mutated = applyRefinance(state.debts, stablecoin, 'USDC')
+      const projected = computeHealthFactor({
+        collateral: state.collateral,
+        debts: mutated,
+        underlyings: state.underlyings,
+        market,
+      })
+      const issuers = reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer).join(', ')
 
-    proposals.push({
-      id: `refinance_stablecoin:${stablecoin}`,
-      kind: 'refinance_stablecoin',
-      params: { fromStablecoin: stablecoin, toStablecoin: 'USDC', valueUsd: owedUsd },
-      rationale:
-        `${stablecoin} borrow shares an issuer (${issuers}) with your collateral, so a single ` +
-        `issuer failure would hit both sides at once. Refinance ${stablecoin} debt into USDC to ` +
-        `break the loop.`,
-      contributingSignals: [],
-      projectedHf: projected.healthFactor,
-      projectedHfDelta: projected.healthFactor - result.healthFactor,
-      urgency: 'high',
-      requiresApproval: false,
-    })
+      proposals.push({
+        id: `refinance_stablecoin:${stablecoin}`,
+        kind: 'refinance_stablecoin',
+        params: { fromStablecoin: stablecoin, toStablecoin: 'USDC', valueUsd: owedUsd },
+        rationale:
+          `${stablecoin} borrow shares an issuer (${issuers}) with your collateral, so a single ` +
+          `issuer failure would hit both sides at once. Refinance ${stablecoin} debt into USDC to ` +
+          `break the loop.`,
+        contributingSignals: [],
+        projectedHf: projected.healthFactor,
+        projectedHfDelta: projected.healthFactor - result.healthFactor,
+        urgency: 'high',
+        requiresApproval: false,
+      })
+    }
   }
 
   proposals.sort((a, b) => {

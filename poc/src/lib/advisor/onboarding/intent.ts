@@ -10,14 +10,14 @@ import type {
 import { computeHealthFactor, PRIVATE_EQUITY_ORIGINATION_HF, type HealthFactorResult } from '../domain/healthFactor'
 import { collateralValueUsd } from '../domain/collateralValue'
 import { ltvParamsFor } from '../domain/ltv'
-import { isBorrowPaused, validateBorrowShares } from '../domain/stablecoin'
+import { effectiveDebtValueUsd, isBorrowPaused, STABLECOIN_CONFIG, validateBorrowShares } from '../domain/stablecoin'
 import { HERO_COLLATERAL, HERO_NOW, HERO_UNDERLYINGS, HERO_USDE_PRICE } from '../fixtures/heroScenario'
 
 /**
  * Onboarding intent — a wizard-editable description of a prospective position
- * (target basket weights, borrows, and mandate) plus the pure functions that
- * translate it into the same engine positions the dashboard operates on and
- * validate it against domain risk rules before activation.
+ * (per-underlying deposits, borrows, and mandate) plus the pure functions
+ * that translate it into the same engine positions the dashboard operates
+ * on and validate it against domain risk rules before activation.
  */
 
 /** A single borrow line in an onboarding intent. */
@@ -27,8 +27,8 @@ export interface IntentBorrow {
 }
 
 export interface IntentConfig {
-  totalCollateralUsd: number
-  weights: Record<UnderlyingId, number>
+  /** Deposit amount in USD per underlying — the deposits-first replacement for weights + total. */
+  deposits: Record<UnderlyingId, number>
   borrows: IntentBorrow[]
   mode: 'manual' | 'semi' | 'auto'
   permissions: Record<string, boolean>
@@ -37,12 +37,11 @@ export interface IntentConfig {
 
 /** Default onboarding intent — the hero scenario, expressed as wizard input. */
 export const DEFAULT_INTENT: IntentConfig = {
-  totalCollateralUsd: 12_500_000,
-  weights: {
-    'EQUITY:NVDA': 0.4,
-    'EQUITY:SPY': 0.3,
-    'EQUITY:AAPL': 0.2,
-    'EQUITY:SPACEX': 0.1,
+  deposits: {
+    'EQUITY:NVDA': 5_000_000,
+    'EQUITY:SPY': 3_750_000,
+    'EQUITY:AAPL': 2_500_000,
+    'EQUITY:SPACEX': 1_250_000,
   },
   borrows: [
     { stablecoin: 'USDC', amountUsd: 3_000_000 },
@@ -101,20 +100,16 @@ const PRICE_AS_OF_BY_ADDRESS: Record<string, number> = Object.fromEntries(
 )
 
 /**
- * Builds token-level collateral positions from target underlying weights and
- * a total collateral budget, splitting each underlying's value across its
- * providers per {@link PROVIDER_SPLITS}. Zero-weight underlyings are skipped.
+ * Builds token-level collateral positions from per-underlying deposit
+ * amounts, splitting each underlying's value across its providers per
+ * {@link PROVIDER_SPLITS}. Zero or absent deposits are skipped.
  */
-export function buildCollateralFromIntent(
-  weights: Record<UnderlyingId, number>,
-  totalUsd: number,
-): CollateralPosition[] {
+export function buildCollateralFromDeposits(deposits: Record<UnderlyingId, number>): CollateralPosition[] {
   const positions: CollateralPosition[] = []
-  for (const [underlyingId, weight] of Object.entries(weights)) {
-    if (!weight) continue
-    const underlyingValueUsd = weight * totalUsd
+  for (const [underlyingId, depositUsd] of Object.entries(deposits)) {
+    if (!depositUsd) continue
     for (const split of PROVIDER_SPLITS[underlyingId] ?? []) {
-      const valueUsd = split.share * underlyingValueUsd
+      const valueUsd = split.share * depositUsd
       positions.push({
         token: split.token,
         quantity: valueUsd / UNIT_PRICE_USD,
@@ -124,6 +119,24 @@ export function buildCollateralFromIntent(
     }
   }
   return positions
+}
+
+/**
+ * Derives target basket weights from deposit amounts: each underlying's
+ * weight is its deposit divided by the total deposited. Returns an empty
+ * object when nothing has been deposited.
+ */
+export function derivedTargetWeights(deposits: Record<UnderlyingId, number>): Record<UnderlyingId, number> {
+  const total = totalDepositsUsd(deposits)
+  if (total === 0) return {}
+  const out: Record<UnderlyingId, number> = {}
+  for (const [id, value] of Object.entries(deposits)) out[id] = (value || 0) / total
+  return out
+}
+
+/** Sum of all per-underlying deposit amounts. */
+export function totalDepositsUsd(deposits: Record<UnderlyingId, number>): number {
+  return Object.values(deposits).reduce((acc, v) => acc + (v || 0), 0)
 }
 
 /**
@@ -165,28 +178,132 @@ export function maxBorrowUsd(
   return total
 }
 
+const HERO_MARKET: MarketContext = { equityMarketOpen: true, now: HERO_NOW }
+
 /**
  * Projects the health factor an onboarding intent would produce, using the
  * same domain math the dashboard runs post-activation — the hero underlyings
  * registry and the hero market context (equity markets open, hero clock).
  */
 export function projectIntentHf(
-  weights: Record<UnderlyingId, number>,
-  totalUsd: number,
+  deposits: Record<UnderlyingId, number>,
   borrows: readonly IntentBorrow[],
 ): HealthFactorResult {
-  const collateral = buildCollateralFromIntent(weights, totalUsd)
+  const collateral = buildCollateralFromDeposits(deposits)
   const debts = buildDebtsFromIntent(borrows)
   return computeHealthFactor({
     collateral,
     debts,
     underlyings: HERO_UNDERLYINGS,
-    market: { equityMarketOpen: true, now: HERO_NOW },
+    market: HERO_MARKET,
   })
 }
 
+/**
+ * Maximum USDT face value against a given face value of other stablecoin
+ * debt, derived from USDT's borrow-share cap (share = usdt / (usdt + other) ≤ cap):
+ *
+ *   usdt ≤ cap × (usdt + other)
+ *   usdt × (1 − cap) ≤ cap × other
+ *   usdt ≤ (cap / (1 − cap)) × other
+ *
+ * At USDT's cap of 0.6 this is usdt ≤ 1.5 × other.
+ */
+export function maxUsdtFaceUsd(otherFaceUsd: number): number {
+  const cap = STABLECOIN_CONFIG.USDT.maxBorrowShare
+  return (cap / (1 - cap)) * otherFaceUsd
+}
+
+/**
+ * Maximum USDe face value against a given face value of other stablecoin
+ * debt, from the same algebra as {@link maxUsdtFaceUsd} applied to USDe's
+ * cap of 0.4: usde ≤ (0.4 / 0.6) × other = (2/3) × other.
+ */
+export function maxUsdeFaceUsd(otherFaceUsd: number): number {
+  const cap = STABLECOIN_CONFIG.USDe.maxBorrowShare
+  return (cap / (1 - cap)) * otherFaceUsd
+}
+
+/**
+ * Solves for the USDC face amount that lands a position at exactly
+ * `targetHf`, holding every other borrow fixed. USDC carries no HF markup
+ * (debtHaircut 0) and prices at 1, so its effective debt equals its face
+ * value:
+ *
+ *   targetHf = riskAdjustedCollateralUsd / (otherEffectiveDebtUsd + usdc)
+ *   usdc = riskAdjustedCollateralUsd / targetHf − otherEffectiveDebtUsd
+ *
+ * Clamped to a minimum of 0 — a target already exceeded by the other borrows
+ * alone has no positive USDC solution.
+ */
+export function usdcForTargetHf(
+  deposits: Record<UnderlyingId, number>,
+  otherBorrows: readonly IntentBorrow[],
+  targetHf: number,
+): number {
+  const collateral = buildCollateralFromDeposits(deposits)
+  const { riskAdjustedCollateralUsd } = computeHealthFactor({
+    collateral,
+    debts: [],
+    underlyings: HERO_UNDERLYINGS,
+    market: HERO_MARKET,
+  })
+  const otherEffectiveDebtUsd = buildDebtsFromIntent(otherBorrows).reduce(
+    (acc, d) => acc + effectiveDebtValueUsd(d),
+    0,
+  )
+  return Math.max(0, riskAdjustedCollateralUsd / targetHf - otherEffectiveDebtUsd)
+}
+
+/**
+ * Keeps risk presets off the exact private-equity floor (1.5) so float
+ * rounding cannot flip a "Balanced"/"Max" preset in and out of validity.
+ */
+const MAX_PRESET_PRIVATE_EQUITY_TARGET_HF = 1.501
+
+/**
+ * The largest USDC borrow amount that still passes {@link validateIntent}:
+ * bounded above by remaining origination capacity, and — when the deposits
+ * include any private-equity-tier underlying — by the USDC amount that holds
+ * HF at {@link MAX_PRESET_PRIVATE_EQUITY_TARGET_HF}. Clamped to a minimum of 0.
+ */
+export function maxUsdcBorrowUsd(deposits: Record<UnderlyingId, number>, otherBorrows: readonly IntentBorrow[]): number {
+  const collateral = buildCollateralFromDeposits(deposits)
+  const capacity = maxBorrowUsd(collateral, HERO_UNDERLYINGS, HERO_MARKET)
+  const otherFaceUsd = otherBorrows.reduce((acc, b) => acc + b.amountUsd, 0)
+  const remainingCapacity = capacity - otherFaceUsd
+
+  const hasPrivateEquityDeposit = Object.entries(deposits).some(
+    ([underlyingId, value]) => value > 0 && HERO_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
+  )
+  const privateEquityBound = hasPrivateEquityDeposit
+    ? usdcForTargetHf(deposits, otherBorrows, MAX_PRESET_PRIVATE_EQUITY_TARGET_HF)
+    : Infinity
+
+  return Math.max(0, Math.min(remainingCapacity, privateEquityBound))
+}
+
+export interface RiskPreset {
+  id: 'conservative' | 'balanced' | 'max'
+  label: string
+  /** Target health factor the USDC anchor solves for; omitted for `max`, which solves against validity bounds instead. */
+  targetHf?: number
+}
+
+/**
+ * Onboarding risk presets, applied only to the USDC anchor borrow (see
+ * {@link usdcForTargetHf} and {@link maxUsdcBorrowUsd}). Conservative and
+ * Balanced solve for a fixed target HF; Max solves for the largest USDC
+ * amount that still passes {@link validateIntent}.
+ */
+export const RISK_PRESETS: RiskPreset[] = [
+  { id: 'conservative', label: 'Conservative', targetHf: 2.0 },
+  { id: 'balanced', label: 'Balanced', targetHf: 1.6 },
+  { id: 'max', label: 'Max' },
+]
+
 export type IntentValidationCode =
-  | 'weights_not_100'
+  | 'no_deposits'
   | 'borrow_exceeds_max_ltv'
   | 'borrow_share_cap'
   | 'private_equity_min_hf'
@@ -205,28 +322,25 @@ export interface IntentValidationResult {
 const usd = (value: number) =>
   value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
 
-/** Tolerance for the weights-sum-to-100% check, absorbing UI rounding. */
-const WEIGHT_SUM_TOLERANCE = 0.001
-
 /**
- * Validates an onboarding intent against the domain risk rules: weights sum
- * to 100%, borrow stays within the origination limit, no stablecoin exceeds
- * its permitted borrow share, private equity meets its minimum origination
- * HF, and USDe is not borrowed while its peg is paused.
+ * Validates an onboarding intent against the domain risk rules: some
+ * collateral must be deposited, borrow stays within the origination limit,
+ * no stablecoin exceeds its permitted borrow share, private equity meets its
+ * minimum origination HF, and USDe is not borrowed while its peg is paused.
  */
 export function validateIntent(config: IntentConfig): IntentValidationResult {
   const errors: IntentValidationError[] = []
   const market: MarketContext = { equityMarketOpen: true, now: HERO_NOW }
 
-  const weightSum = Object.values(config.weights).reduce((acc, w) => acc + w, 0)
-  if (Math.abs(weightSum - 1) > WEIGHT_SUM_TOLERANCE) {
+  const totalDeposits = totalDepositsUsd(config.deposits)
+  if (totalDeposits <= 0) {
     errors.push({
-      code: 'weights_not_100',
-      message: `Your target weights total ${(weightSum * 100).toFixed(0)}% — they must add up to 100% before you continue.`,
+      code: 'no_deposits',
+      message: 'Deposit some collateral before continuing — your portfolio is currently empty.',
     })
   }
 
-  const collateral = buildCollateralFromIntent(config.weights, config.totalCollateralUsd)
+  const collateral = buildCollateralFromDeposits(config.deposits)
   const debts = buildDebtsFromIntent(config.borrows)
   const capacity = maxBorrowUsd(collateral, HERO_UNDERLYINGS, market)
   const totalBorrowUsd = config.borrows.reduce((acc, b) => acc + b.amountUsd, 0)
@@ -249,8 +363,8 @@ export function validateIntent(config: IntentConfig): IntentValidationResult {
     })
   }
 
-  const holdsPrivateEquity = Object.entries(config.weights).some(
-    ([underlyingId, weight]) => weight > 0 && HERO_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
+  const holdsPrivateEquity = Object.entries(config.deposits).some(
+    ([underlyingId, value]) => value > 0 && HERO_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
   )
   if (holdsPrivateEquity) {
     const projected = computeHealthFactor({ collateral, debts, underlyings: HERO_UNDERLYINGS, market })
@@ -258,7 +372,7 @@ export function validateIntent(config: IntentConfig): IntentValidationResult {
       errors.push({
         code: 'private_equity_min_hf',
         message:
-          'Private equity in your basket requires a health factor of at least 1.50 at origination — reduce borrow or SPACEX weight.',
+          'Private equity in your basket requires a health factor of at least 1.50 at origination — reduce borrow or SPACEX deposit.',
       })
     }
   }

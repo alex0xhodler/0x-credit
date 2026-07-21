@@ -529,3 +529,71 @@ Gate B: 189 tests, dashboard restructure verified end-to-end including the
 skip-demo reflexive scenario (banner + high-urgency refinance proposal) and
 the wizard-path case where no USDe debt exists and the loop correctly does
 not fire. All engine behavior preserved; old dashboard files removed.
+
+## Round 3: light-mode rework (product-owner direction)
+
+Product owner rejected the dark theme and generic dashboard UX; mandated the
+cockpit design language (light, white card, two-pane, deposit mechanisms from
+the WETH screen), stock-selection-first onboarding with deposit + max-borrow
+per risk level on one screen, and only Mandate + Review as extra steps. Critic
+raised 8 objections against the builder's rework plan.
+
+### B1
+
+- Objection: Plan claims an intent API reshape AND byte-identical pinned tests — impossible; intent.test.ts calls the weights API by name and fails to compile.
+- Impact: high
+- Builder response: API break declared. The pin protects the INVARIANT (default intent reproduces HERO_COLLATERAL/HERO_DEBTS exactly), not the signature. The equivalence test is rewritten once against buildCollateralFromDeposits(DEFAULT_DEPOSITS); weights_not_100 validation, Normalize, and weight sliders are deleted with the weights API. No compatibility shim (YAGNI).
+- Status: resolved
+
+### B2
+
+- Objection: USDT-only (share cap 60%) and USDe-only (40%) borrow books can never validate; the pill selector plus presets walk users into a stuck Continue.
+- Impact: high
+- Builder response: Structural fix — USDC is the non-removable anchor coin; USDT/USDe are optional adds whose inputs show and clamp to their live per-coin max derived from the share cap (usdt ≤ 1.5 × other face value; usde ≤ 2/3 × other). Dead-end states become unreachable rather than merely flagged.
+- Status: resolved
+
+### B3
+
+- Objection: Risk-preset math under-specified: HF targets vs LTV cap mixed semantics, negative solutions with multiple coins, "Max" collides with the private-equity HF≥1.5 floor, "Balanced" at exactly 1.5 flickers on float rounding.
+- Impact: high
+- Builder response: Presets apply ONLY to the USDC anchor (markup 1, uncapped): amount = riskAdjustedCollateral/H* − otherEffectiveDebt, clamped at 0. Targets: Conservative H*=2.0, Balanced H*=1.6 (moved off the 1.5 cliff), Max = largest USDC amount passing validateIntent = min(capacity − other face, PE present ? solve(HF=1.501) : ∞). Single-coin, clamped, PE-aware, no mixed semantics.
+- Status: resolved
+
+### B4
+
+- Objection: "Adapt tests" understates blast radius — step-1/2 onboarding suites and intent unit tests are rewritten, not adapted.
+- Impact: high
+- Builder response: Owned explicitly: Pass C1 rewrites intent tests around the new API (invariant preserved); Pass C2 rewrites the screen-1 suites for selection/deposit/borrow-in-one. Behavioral contracts that survive (mandate defaults, review preview, activation, skip-demo, dashboard 9-case suite) are kept.
+- Status: resolved
+
+### B5
+
+- Objection: Guarding the NaN delta is symptom-patching; the engine emits vacuous HF-protection proposals when debt is zero (CLAUDE.md: never fix just the symptom).
+- Impact: medium-high
+- Builder response: Root fix in engine: reduce_weight and refinance proposals gate on effectiveDebtUsd > 0; provider_diversify still fires unlevered (issuer risk is debt-independent). Display formatting of infinite HF ("∞", no delta pill) retained as defense-in-depth for the dashboard tiles. Engine test added.
+- Status: resolved
+
+### B6
+
+- Objection: CSS plan ambiguous between reusing cockpit classes (specificity fights with global App.css) and forking (hundreds of diverging lines); global body::before/::after paints unaddressed.
+- Impact: medium
+- Builder response: Decision: fork-by-token. advisor.css keeps its own scoped classes; only its token block flips to the cockpit palette/typography/radii. No bare cockpit class reuse. Builder must verify App.css global paints (body pseudo-elements, element selectors) do not bleed through the light canvas and neutralize explicitly; the browser-screenshot gate verifies.
+- Status: resolved
+
+### B7
+
+- Objection: Deriving targetWeights from deposits welds targets to the origination mix forever; drift only ever rebalances toward the initial ratio.
+- Impact: low-medium
+- Builder response: Accepted and documented — no regression today (targets already equal weights at activation). Authoring targets distinct from holdings is noted as a future basket-manager feature.
+- Status: accepted
+
+### B8
+
+- Objection: Unspecified: Reconfigure round-trip with deposit maps; concrete mapping of "WETH screen mechanisms"; dashboard divide-by-zero guards at $0 borrow.
+- Impact: low-medium
+- Builder response: All three specified: initialConfig carries the deposit map through Reconfigure; the lifted mechanisms are named from TransactionCockpit.tsx (deposit-input field, deposit-preset pills, execution-steps strip, primary-action pill CTA, ROUTE provenance line); dashboard tiles guard $0 borrow (blended APR "—", capacity 0%).
+- Status: resolved
+
+Decision: proceed. Pass C1 = engine zero-debt gate + intent reshape (TDD);
+Pass C2 = cockpit-language restyle + combined screen 1 + dashboard restyle +
+test rewrite. Supervisor gates with browser screenshots after each pass.
