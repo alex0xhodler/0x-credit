@@ -30,7 +30,7 @@
   flex-wrap: wrap;
 }
 
-.advisor-brand {
+.advisor .advisor-brand {
   font-weight: 700;
   letter-spacing: -0.4px;
   margin-right: 12px;
@@ -335,7 +335,7 @@
   gap: 8px;
 }
 
-.advisor-btn {
+.advisor .advisor-btn {
   padding: 8px 18px;
   border-radius: 999px;
   background: var(--adv-accent);
@@ -345,7 +345,7 @@
   cursor: pointer;
 }
 
-.advisor-btn--ghost {
+.advisor .advisor-btn--ghost {
   background: transparent;
   border: 1px solid var(--adv-line);
   color: var(--adv-muted);

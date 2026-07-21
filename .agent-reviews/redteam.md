@@ -351,3 +351,171 @@ Proceed with the user-selected Strategy Shelf and Editorial defaults. Route prov
 ## Round 6 interim decision
 
 Proceed with one continuous balance chart. It compounds pinned historical APY from the selected starting deposit through `Now`, then carries every series forward using its current rate. The selected strategy's historic half uses the underlying Beefy pool APY; its forward half uses the corrected net Gearbox APY. The chart discloses that distinction, and the entered deposit resets its baseline after a 300ms debounce. No high-impact objection remains open.
+
+---
+
+# Advisor Onboarding & Dashboard Rebuild Red-Team Review
+
+Date: 2026-07-21
+
+## Proposal under review
+
+Rebuild the `?view=advisor` experience as a two-phase SPA: a 4-step agent
+onboarding wizard (Portfolio → Borrow → Mandate → Review & activate) as the
+primary state, and a restructured dashboard (stat tiles → prioritized agent
+feed → right rail) as the post-activation state. New pure module
+`lib/advisor/onboarding/intent.ts` translates onboarding intent into engine
+positions with validation (weights, max-LTV, share caps, private-equity min
+HF, USDe peg). Live HF meter on the borrow step and a pre-activation agent
+preview ("your agent is already watching") as the two aha moments. Engine and
+existing cockpit untouched; in-memory state; existing dashboard tests ported
+via a skip-demo path. Builder: Sonnet code agent from spec; verification:
+supervisor gate (vitest, tsc, eslint, build, real-browser screenshots).
+
+## Round 1: independent critic
+
+(objections recorded below after critic pass)
+
+### A1
+
+- ID: A1
+- Date: 2026-07-21
+- Proposal: Port the 8 dashboard tests via a skip-demo path while onboarding uses a new intent builder.
+- Objection: Skip and activate produce divergent PositionStates; ported tests would only cover the non-product path, and the intent builder structurally cannot reproduce HERO_COLLATERAL (Ondo score-4 NVDA split, stale-NAV SpaceX token), making "all 8 pass" unattainable as written.
+- Impact: high
+- Evidence or missing evidence: heroScenario.ts:48-63 (two-provider NVDA, NAV token priceAsOf HERO_NOW-1h); three of eight tests depend on that exact structure. The plan never stated which source skip-demo uses.
+- Builder response: Single construction path. Skip-demo routes through buildCollateralFromIntent(DEFAULT_INTENT); PROVIDER_SPLITS encodes the exact hero tokens (bNVDA 60/oNVDA 40, NAV token with priceAsOf = HERO_NOW − 1h). A required intent test asserts buildCollateralFromIntent(defaults, 12.5M) deep-equals HERO_COLLATERAL (order-insensitive) and buildDebtsFromIntent(defaults) equals HERO_DEBTS — the equivalence is pinned by a test, not asserted.
+- Status: resolved
+
+### A2
+
+- ID: A2
+- Date: 2026-07-21
+- Proposal: Step-4 "agent already watching" preview as the second aha.
+- Objection: The preview is hard-wired to the single NVDA earnings signal; any user who rebalances away from NVDA gets an empty marquee panel, collapsing the aha for real wizard interaction.
+- Impact: high
+- Evidence or missing evidence: engine gates per-underlying proposals on one NVDA-only feed (STRONG_SIGNAL 0.6); no spec for arbitrary intents.
+- Builder response: Preview renders the TOP proposal of ANY kind from assessPosition (provider-concentration findings fire for nearly every constructible basket, since SPY/AAPL/SPACEX are single-provider), with kind-appropriate copy, plus an always-present "what your agent watches" list (registered signals, thresholds, drift bands). Graceful empty state retained as final fallback. Aha reframed from "earnings catch" to "agent has already assessed your configured position."
+- Status: resolved
+
+### A3
+
+- ID: A3
+- Date: 2026-07-21
+- Proposal: Collapse non-first proposals by CSS so DOM nodes persist for ported tests.
+- Objection: Testing anti-pattern — asserts on content users cannot see, shapes production markup for test convenience, and is contradictory under accessibility (aria-hidden vs queryable).
+- Impact: high
+- Evidence or missing evidence: CLAUDE.md testing-anti-patterns mandate; test 5 clicks a button inside a proposal body.
+- Builder response: Dropped. Collapsed proposals conditionally render header-only (disclosure pattern: button with aria-expanded controlling a region). Ported tests are amended honestly with an expandProposal(testid) helper that clicks the disclosure first — tests now interact as users do.
+- Status: resolved
+
+### A4
+
+- ID: A4
+- Date: 2026-07-21
+- Proposal: "Port the 8 tests" unchanged against a reshuffled DOM (first-expanded feed, grouped diversify card, right-rail borrow panel).
+- Objection: Silent testid/ordering coupling: NVDA reduce_weight must be first-and-expanded for getByLabelText to work; engine ordering, not UI, decides.
+- Impact: high
+- Evidence or missing evidence: engine sorts urgency desc then HF delta; current tests reach inputs directly.
+- Builder response: Ordering verified from engine code: base demo → reduce_weight (medium) sorts above provider_diversify (low), so NVDA is first-and-expanded; reflexive mode → refinance (high) is first. Tests no longer depend on ordering regardless, via the A3 expand helper. Grouped diversify card keeps per-proposal sub-rows with unchanged testids; borrow-panel testid stays on the rail panel. Ported tests are acknowledged as re-authored against the new DOM; their behavioral assertions (HF math, approve/dismiss effects, reflexive flow) are the preserved contract, not the DOM shape.
+- Status: resolved
+
+### A5
+
+- ID: A5
+- Date: 2026-07-21
+- Proposal: Deliver the whole rebuild in one code-agent pass.
+- Objection: Surface area roughly triples the current screen plus a new math module; realistic outcome is partial or subtly wrong delivery at the engine seams.
+- Impact: high
+- Evidence or missing evidence: current screen ~293 lines with eight interacting behaviors.
+- Builder response: Split into two sequential passes with a supervisor verification gate between. Pass A: intent module (TDD) + AdvisorApp container + onboarding wizard + wizard tests + design tokens. Gate A: full test/type/lint/build + browser screenshots of every step. Pass B: dashboard restructure + honest test port + integration. Gate B: same plus end-to-end flow screenshots.
+- Status: resolved
+
+### A6
+
+- ID: A6
+- Date: 2026-07-21
+- Proposal: Add HERO_BORROW_APR and HERO_USDE_PEG to the fixture; domain untouched.
+- Objection: STABLECOIN_CONFIG has no APR field, forcing either a domain edit or a second source of truth; a separate peg constant can disagree with HERO_DEBTS' 0.999.
+- Impact: medium
+- Evidence or missing evidence: stablecoin.ts:24-28; heroScenario.ts:69.
+- Builder response: APR is demo data, not domain truth — it lives only in the fixture as HERO_BORROW_APR with a comment marking it v2-RateModel territory; intent.ts and UI read it from the fixture. Peg: no second constant; export HERO_USDE_PRICE = 0.999 and use it inside HERO_DEBTS so there is exactly one source.
+- Status: resolved
+
+### A7
+
+- ID: A7
+- Date: 2026-07-21
+- Proposal: maxBorrowUsd = Σ haircut-adjusted value × maxLtv beside a liquidation-threshold HF meter.
+- Objection: The two Step-2 widgets measure different ratios without reconciliation; Σ×maxLtv is ill-defined per-underlying since maxLtv is per token.
+- Impact: medium
+- Evidence or missing evidence: ltv.ts:28-39 (per-token step-down); healthFactor.ts uses liquidationThreshold.
+- Builder response: Intentional and now explicit: capacity = origination limit (max LTV, computed per TOKEN position then summed), meter = liquidation distance. Copy labels the bar "of origination limit". Borrowing to 100% of capacity yields HF ≈ 1.13-1.15 — inside the amber intervention zone on the meter, which is the honest, coherent story and is stated in the spec.
+- Status: resolved
+
+### A8
+
+- ID: A8
+- Date: 2026-07-21
+- Proposal: "Reconfigure" returns to a prefilled wizard.
+- Objection: No inverse mapping exists from a mutated position back to intent; prefilling from original intent discards approved changes.
+- Impact: medium
+- Evidence or missing evidence: forward transform is lossy by design.
+- Builder response: Accepted with mitigation. Reconfigure prefills from the last confirmed intent; if the position was mutated since activation, step 1 shows a notice ("Your agent has applied N approved changes since activation; reconfiguring restarts from your last confirmed mandate."). True inverse derivation is real-product scope, out of demo scope — documented.
+- Status: accepted
+
+### A9
+
+- ID: A9
+- Date: 2026-07-21
+- Proposal: Onboarding wizard as the primary state.
+- Objection: A demo screen should lead with insight, not a configuration gate; wizard-first resembles signup flows, not familiar DeFi patterns; the skip link is an admission of friction; the reflexive differentiator is demoted behind onboarding.
+- Impact: medium
+- Evidence or missing evidence: App.tsx labels the screen a fixture demo; Aave/Morpho land on live views.
+- Builder response: Accepted as an explicit product-owner mandate ("focus on the onboarding experience of the agent, that should be the primary state of this screen"). Mitigations adopted: both aha moments moved INTO the wizard (live risk meter, pre-activation agent preview) so the wizard is the insight rather than friction before it; skip-demo stays one click; reflexive toggle remains post-activation (noted as a candidate for a future guided-scenario entry).
+- Status: accepted
+
+### A10
+
+- ID: A10
+- Date: 2026-07-21
+- Proposal: Custom sliders, meter, selectable cards, toggles.
+- Objection: No accessibility or test-affordance contract; div-based widgets break both screen readers and RTL interaction.
+- Impact: medium
+- Evidence or missing evidence: current tests drive a native number input via getByLabelText.
+- Builder response: Spec now mandates native controls under all styling: input[type=range] for sliders, visually-hidden native radio/checkbox inputs for mode cards and permission toggles, label/aria-labelledby on every input, the HF meter as role="meter" with aria-valuemin/max/now, disclosure buttons with aria-expanded. Tests drive only native inputs and accessible roles.
+- Status: resolved
+
+## Round 1 summary
+
+All four high-impact objections resolved with verifiable spec changes (A1
+equivalence pinned by a required test; A3 anti-pattern removed; A4 ordering
+verified from engine sort logic; A5 rollout split into two gated passes).
+A8/A9 accepted with documented rationale — A9 by explicit product-owner
+mandate. Proceeding to a targeted critic reopen pass on the adjudications.
+
+## Round 2: critic reopen pass
+
+The critic independently recomputed the three load-bearing claims against the
+repo rather than trusting builder assertions:
+
+- A1 fixture reproducibility: all intent products land on exactly-representable
+  values (bNVDA $3M/qty 30000, oNVDA $2M/qty 20000, SPACEX qty 12500 with
+  priceAsOf HERO_NOW−1h); equivalence is attainable and pinned by a required test.
+- A4 ordering: URGENCY_RANK + comparator prove reduce_weight:NVDA first in base
+  mode and refinance_stablecoin:USDe first in reflexive mode; no tie hazard.
+- A7 arithmetic: capacity $8,115,000; HF numerator $9,335,000; HF at 100%
+  capacity ∈ [1.137, 1.150] — matches the claimed 1.13–1.15 amber-zone story.
+
+All ten adjudications UPHELD; zero reopened. Non-blocking note: the A1
+deep-equal requires the builder to preserve exact per-provider sub-values —
+enforced by the pinned equivalence test.
+
+## Decision
+
+Build proceeds on the revised plan. Resolved: A1-A7, A10 (verifiable spec and
+rollout changes). Accepted with documented rationale: A8 (lossy reconfigure,
+demo scope), A9 (wizard-first by explicit product-owner mandate, aha moved into
+the wizard). No stalemate. Rollout: two sequential code passes (A: intent
+module + wizard; B: dashboard restructure) with a supervisor verification gate
+(tests, types, lint, build, real-browser screenshots) after each.

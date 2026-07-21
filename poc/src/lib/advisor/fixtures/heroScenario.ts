@@ -1,4 +1,4 @@
-import type { CollateralPosition, DebtPosition, ProviderToken, Underlying, UnderlyingId } from '../types'
+import type { CollateralPosition, DebtPosition, ProviderToken, Stablecoin, Underlying, UnderlyingId } from '../types'
 import type { SignalFeed } from '../agent/signals'
 import type { PositionState } from '../agent/engine'
 import type { RouteQuote } from '../routing/costEngine'
@@ -12,6 +12,19 @@ import type { RouteQuote } from '../routing/costEngine'
 
 /** Fixed market-open timestamp anchoring the scenario. */
 export const HERO_NOW = Date.UTC(2026, 6, 21, 14, 30, 0)
+
+/** USDe on-chain price for the scenario — the single source of truth for the peg. */
+export const HERO_USDE_PRICE = 0.999
+
+/**
+ * Demo data only; a real deployment reads borrow rates from the venue (v2
+ * RateModel). Shown in the onboarding wizard's stablecoin cards.
+ */
+export const HERO_BORROW_APR: Record<Stablecoin, number> = {
+  USDC: 0.078,
+  USDT: 0.084,
+  USDe: 0.121,
+}
 
 export const HERO_UNDERLYINGS: Record<UnderlyingId, Underlying> = {
   'EQUITY:NVDA': { id: 'EQUITY:NVDA', symbol: 'NVDA', name: 'NVIDIA', tier: 'blue_chip' },
@@ -66,7 +79,7 @@ export const HERO_COLLATERAL: CollateralPosition[] = [
 export const HERO_DEBTS: DebtPosition[] = [
   { stablecoin: 'USDC', amount: 3_000_000, priceUsd: 1 },
   { stablecoin: 'USDT', amount: 1_200_000, priceUsd: 1 },
-  { stablecoin: 'USDe', amount: 800_000, priceUsd: 0.999 },
+  { stablecoin: 'USDe', amount: 800_000, priceUsd: HERO_USDE_PRICE },
 ]
 
 export const HERO_TARGET_WEIGHTS: Record<UnderlyingId, number> = {

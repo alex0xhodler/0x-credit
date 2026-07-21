@@ -21,7 +21,7 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { AdvisorDashboard } from './AdvisorDashboard'
+import { AdvisorApp } from './advisor/AdvisorApp'
 import { TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type TopbarVariant } from './TransactionCockpit'
 import {
   config,
@@ -716,7 +716,7 @@ function GearboxApp() {
 export function App() {
   // Fixture-driven advisor demo — no wallet or chain required.
   if (new URLSearchParams(window.location.search).get('view') === 'advisor') {
-    return <AdvisorDashboard />
+    return <AdvisorApp />
   }
 
   return (
