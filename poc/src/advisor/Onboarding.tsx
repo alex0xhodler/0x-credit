@@ -309,8 +309,8 @@ function Screen1({
       <section className="advisor-pane-content">
         <h2>Build your position</h2>
         <p className="advisor-explainer">
-          A robo-advisor in reverse: instead of paying cash for a managed basket, you deposit tokenized stocks and
-          borrow stablecoins against them — while your agent manages the risk.
+          Agentic stock lending — deposit tokenized stocks, borrow stablecoins against them, and let your agent
+          manage the risk.
         </p>
 
         {appliedChangesNotice > 0 && (

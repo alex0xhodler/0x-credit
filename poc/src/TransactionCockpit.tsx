@@ -437,12 +437,12 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                   }
                 </button>
               ))}
-            </div>
 
-            <a href="?view=advisor" className="advisor-nav-link">
-              Robo-Advisor
-              <span className="advisor-nav-tag">Early access</span>
-            </a>
+              <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
+                Robo-Advisor
+                <span className="advisor-nav-tag">Early access</span>
+              </a>
+            </div>
           </div>
 
         </header>

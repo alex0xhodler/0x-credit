@@ -1402,7 +1402,7 @@ button {
   text-transform: uppercase;
 }
 
-/* Right-side header cluster: strategy tabs + advisor nav link */
+/* Right-side header cluster: strategy tabs (incl. advisor tab) */
 .header-right-cluster {
   display: flex;
   align-items: center;
@@ -1415,26 +1415,6 @@ button {
   display: flex;
   gap: 6px;
   min-width: 0;
-}
-
-.advisor-nav-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: var(--button-radius);
-  border: 1px solid var(--line);
-  background: var(--paper);
-  color: var(--ink);
-  font-family: "Inter", system-ui, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: border-color 160ms;
-}
-
-.advisor-nav-link:hover {
-  border-color: var(--line-strong);
 }
 
 .advisor-nav-tag {
@@ -1488,6 +1468,12 @@ button {
 .strategy-tab .token-icon {
   width: 18px;
   height: 18px;
+}
+
+.strategy-tab--advisor {
+  text-decoration: none;
+  cursor: pointer;
+  color: inherit;
 }
 
 .tab-apy {
