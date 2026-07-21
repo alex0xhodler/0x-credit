@@ -91,7 +91,7 @@ export function EarlyAccess({ intent, onSubmitted, onPreviewDashboard }: EarlyAc
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           email,
-          source: '0x-credit robo-advisor early access',
+          source: '0x-credit stock credit early access',
           deposits: compactDepositsSummary(intent),
           borrow: compactBorrowSummary(intent),
           mode: intent.mode,
@@ -114,7 +114,7 @@ export function EarlyAccess({ intent, onSubmitted, onPreviewDashboard }: EarlyAc
             0x
           </span>
           <span className="advisor-topbar-divider" aria-hidden="true" />
-          <span className="advisor-topbar-label">Robo-Advisor</span>
+          <span className="advisor-topbar-label">Stock Credit</span>
         </header>
 
         <div className="advisor-body">

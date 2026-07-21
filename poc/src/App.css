@@ -1470,10 +1470,46 @@ button {
   height: 18px;
 }
 
-.strategy-tab--advisor {
+/* Product switcher: "Stock Credit" is a distinct product, not another strategy tab —
+   separated from the strategy tablist by a vertical divider. */
+.product-divider {
+  width: 1px;
+  height: 24px;
+  margin: 0 12px;
+  background: var(--line);
+  flex: none;
+}
+
+.product-link {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 12px;
   text-decoration: none;
-  cursor: pointer;
   color: inherit;
+  cursor: pointer;
+  transition: background 160ms;
+}
+
+.product-link:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.product-link-line1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.product-link-line2 {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .tab-apy {

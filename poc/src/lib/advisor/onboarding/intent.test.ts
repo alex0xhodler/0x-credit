@@ -9,6 +9,7 @@ import {
   maxUsdeFaceUsd,
   maxUsdtFaceUsd,
   projectIntentHf,
+  PROVIDER_SPLITS,
   RISK_PRESETS,
   totalDepositsUsd,
   usdcForTargetHf,
@@ -28,6 +29,7 @@ import {
   HERO_UNDERLYINGS,
   HERO_USDE_PRICE,
 } from '../fixtures/heroScenario'
+import { MTBILL_ADDRESS, REAL_PROVIDER_TOKENS } from '../catalog/realTokens'
 import type { CollateralPosition, DebtPosition } from '../types'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
@@ -278,5 +280,44 @@ describe('validateIntent', () => {
     }
     const result = validateIntent(config)
     expect(result.errors.some(e => e.code === 'usde_paused')).toBe(false)
+  })
+})
+
+describe('RWA catalog integration', () => {
+  it('gives every REAL_PROVIDER_TOKENS underlying a single 100%-share provider split', () => {
+    for (const token of REAL_PROVIDER_TOKENS) {
+      const splits = PROVIDER_SPLITS[token.underlyingId]
+      expect(splits).toHaveLength(1)
+      expect(splits[0].share).toBe(1)
+      expect(splits[0].token.address).toBe(token.address)
+    }
+  })
+
+  it('buildCollateralFromDeposits produces a single fresh-priced position for a treasury deposit', () => {
+    const built = buildCollateralFromDeposits({ 'RWA:MTBILL': 1_000_000 })
+    expect(built).toHaveLength(1)
+    expect(built[0].token.underlyingId).toBe('RWA:MTBILL')
+    expect(built[0].token.address).toBe(MTBILL_ADDRESS.toLowerCase())
+    expect(built[0].quantity * built[0].priceUsd).toBeCloseTo(1_000_000, 6)
+    expect(built[0].priceAsOf).toBe(HERO_NOW)
+  })
+
+  it('validateIntent passes for a treasury-only deposit with no borrow', () => {
+    const config: IntentConfig = { ...DEFAULT_INTENT, deposits: { 'RWA:MTBILL': 1_000_000 }, borrows: [] }
+    const result = validateIntent(config)
+    expect(result.ok).toBe(true)
+    expect(result.errors).toEqual([])
+  })
+
+  it('projectIntentHf resolves the treasury tier internally for an RWA-only deposit with debt', () => {
+    // BUIDL: provider score 5 → base treasury liquidationThreshold (0.88) unmodified.
+    const projected = projectIntentHf({ 'RWA:BUIDL': 2_000_000 }, [{ stablecoin: 'USDC', amountUsd: 1_000_000 }])
+    expect(projected.healthFactor).toBeCloseTo((2_000_000 * 0.88) / 1_000_000, 6)
+  })
+
+  it('maxUsdcBorrowUsd returns the treasury origination capacity (no private-equity floor) for a BUIDL-only deposit', () => {
+    // BUIDL: provider score 5 → base treasury maxLtv (0.80) unmodified.
+    const bound = maxUsdcBorrowUsd({ 'RWA:BUIDL': 2_000_000 }, [])
+    expect(bound).toBeCloseTo(2_000_000 * 0.8, 6)
   })
 })

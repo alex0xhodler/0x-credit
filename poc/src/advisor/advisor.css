@@ -294,10 +294,49 @@
    Stock catalog (screen 1)
    ========================================================================== */
 
+.advisor-catalog-section {
+  margin-bottom: 20px;
+}
+
+.advisor-catalog-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.advisor-catalog-section-head .advisor-overline {
+  margin: 0;
+}
+
+.advisor-catalog-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: var(--button-radius);
+  white-space: nowrap;
+}
+
+.advisor-catalog-badge--illustrative {
+  color: var(--muted);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+}
+
+.advisor-catalog-badge--live {
+  color: var(--good);
+  background: var(--good-bg);
+}
+
 .advisor-catalog {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-bottom: 0;
+}
+
+.advisor-catalog-section:last-of-type {
   margin-bottom: 20px;
 }
 

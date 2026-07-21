@@ -7,6 +7,7 @@ describe('ltvParamsFor', () => {
     expect(ltvParamsFor('index_etf', 5)).toEqual({ maxLtv: 0.75, liquidationThreshold: 0.82 })
     expect(ltvParamsFor('small_mid_cap', 5)).toEqual({ maxLtv: 0.5, liquidationThreshold: 0.62 })
     expect(ltvParamsFor('private_equity', 5)).toEqual({ maxLtv: 0.45, liquidationThreshold: 0.58 })
+    expect(ltvParamsFor('treasury', 5)).toEqual({ maxLtv: 0.8, liquidationThreshold: 0.88 })
   })
 
   it('reduces max LTV by 3% and liquidation threshold by 2% per step below score 5', () => {

@@ -25,20 +25,27 @@ import {
   HERO_BORROW_APR,
   HERO_NOW,
   HERO_SIGNALS,
-  HERO_UNDERLYINGS,
   HERO_USDE_PRICE,
 } from '../lib/advisor/fixtures/heroScenario'
+import { CATALOG_UNDERLYINGS } from '../lib/advisor/catalog/realTokens'
 import type { ProviderRiskScore, Stablecoin, Underlying, UnderlyingId } from '../lib/advisor/types'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
 const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
 
+/** Tokenized-treasury catalog rows, rendered below the stock catalog on screen 1. */
+const RWA_ORDER: UnderlyingId[] = ['RWA:MTBILL', 'RWA:BUIDL', 'RWA:MBASIS']
+
+/** The full onboarding catalog — stocks first, then treasuries — used for state keyed by underlying. */
+const CATALOG_ORDER: UnderlyingId[] = [...UNDERLYING_ORDER, ...RWA_ORDER]
+
 const TIER_CHIP_LABEL: Record<Underlying['tier'], string> = {
   blue_chip: 'Blue chip',
   index_etf: 'Index / ETF',
   small_mid_cap: 'Small / mid cap',
   private_equity: 'Private · manual approval only',
+  treasury: 'Treasury',
 }
 
 const STEP_LABELS = ['Position', 'Mandate', 'Review']
@@ -113,8 +120,8 @@ interface StockMeta {
 }
 
 const STOCK_META: Record<UnderlyingId, StockMeta> = Object.fromEntries(
-  UNDERLYING_ORDER.map(id => {
-    const underlying = HERO_UNDERLYINGS[id]
+  CATALOG_ORDER.map(id => {
+    const underlying = CATALOG_UNDERLYINGS[id]
     const splits = PROVIDER_SPLITS[id] ?? []
     const { maxLtv } = ltvParamsFor(underlying.tier, bestProviderScore(id))
     return [id, { maxLtvPct: Math.round(maxLtv * 100), providerCount: splits.length }]
@@ -129,7 +136,7 @@ interface DepositRowState {
 
 function initialDepositState(config?: IntentConfig): Record<UnderlyingId, DepositRowState> {
   const out = {} as Record<UnderlyingId, DepositRowState>
-  for (const id of UNDERLYING_ORDER) {
+  for (const id of CATALOG_ORDER) {
     const amount = config?.deposits[id] ?? 0
     out[id] = { selected: amount > 0, amountUsd: amount, input: amount > 0 ? formatUsd(amount) : '' }
   }
@@ -172,7 +179,7 @@ interface StockRowProps {
 }
 
 function StockRow({ id, state, onToggle, onAmountChange, onAmountBlur, onPreset }: StockRowProps) {
-  const underlying = HERO_UNDERLYINGS[id]
+  const underlying = CATALOG_UNDERLYINGS[id]
   const meta = STOCK_META[id]
   return (
     <div className={`advisor-stock-row${state.selected ? ' is-selected' : ''}`}>
@@ -320,22 +327,50 @@ function Screen1({
           </p>
         )}
 
-        <div className="advisor-catalog">
-          {UNDERLYING_ORDER.map(id => (
-            <StockRow
-              key={id}
-              id={id}
-              state={deposits[id]}
-              onToggle={selected => onToggleStock(id, selected)}
-              onAmountChange={raw => onDepositChange(id, raw)}
-              onAmountBlur={() => onDepositBlur(id)}
-              onPreset={amount => onDepositPreset(id, amount)}
-            />
-          ))}
+        <div className="advisor-catalog-section">
+          <div className="advisor-catalog-section-head">
+            <h3 className="advisor-overline">Tokenized stocks</h3>
+            <span className="advisor-catalog-badge advisor-catalog-badge--illustrative">
+              Illustrative — pending issuer integrations
+            </span>
+          </div>
+          <div className="advisor-catalog">
+            {UNDERLYING_ORDER.map(id => (
+              <StockRow
+                key={id}
+                id={id}
+                state={deposits[id]}
+                onToggle={selected => onToggleStock(id, selected)}
+                onAmountChange={raw => onDepositChange(id, raw)}
+                onAmountBlur={() => onDepositBlur(id)}
+                onPreset={amount => onDepositPreset(id, amount)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div className="advisor-catalog-section">
+          <div className="advisor-catalog-section-head">
+            <h3 className="advisor-overline">Tokenized treasuries</h3>
+            <span className="advisor-catalog-badge advisor-catalog-badge--live">Live on Gearbox · via SDK adapters</span>
+          </div>
+          <div className="advisor-catalog">
+            {RWA_ORDER.map(id => (
+              <StockRow
+                key={id}
+                id={id}
+                state={deposits[id]}
+                onToggle={selected => onToggleStock(id, selected)}
+                onAmountChange={raw => onDepositChange(id, raw)}
+                onAmountBlur={() => onDepositBlur(id)}
+                onPreset={amount => onDepositPreset(id, amount)}
+              />
+            ))}
+          </div>
         </div>
 
         <p className="advisor-route-strip">
-          You deposit: {selectedIds.length > 0 ? selectedIds.map(id => HERO_UNDERLYINGS[id].symbol).join(', ') : '—'} ·
+          You deposit: {selectedIds.length > 0 ? selectedIds.map(id => CATALOG_UNDERLYINGS[id].symbol).join(', ') : '—'} ·
           Agent: 0x.credit routing · Protocol: Gearbox
         </p>
 
@@ -355,7 +390,7 @@ function Screen1({
           </div>
           {selectedIds.map(id => (
             <div className="advisor-position-line" key={id}>
-              <dt>{HERO_UNDERLYINGS[id].symbol}</dt>
+              <dt>{CATALOG_UNDERLYINGS[id].symbol}</dt>
               <dd>{formatUsd(deposits[id].amountUsd)}</dd>
             </div>
           ))}
@@ -647,7 +682,7 @@ function Screen3({
             <p className="advisor-overline">Deposits</p>
             {selectedIds.map(id => (
               <div className="advisor-review-row" key={id}>
-                <dt>{HERO_UNDERLYINGS[id].symbol}</dt>
+                <dt>{CATALOG_UNDERLYINGS[id].symbol}</dt>
                 <dd>{formatUsd(deposits[id].amountUsd)}</dd>
               </div>
             ))}
@@ -796,11 +831,11 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
   )
   const [interventionHf, setInterventionHf] = useState(initialConfig?.interventionHf ?? DEFAULT_INTENT.interventionHf)
 
-  const selectedIds = UNDERLYING_ORDER.filter(id => deposits[id].selected)
+  const selectedIds = CATALOG_ORDER.filter(id => deposits[id].selected)
 
   const depositsRecord: Record<UnderlyingId, number> = useMemo(() => {
     const out = {} as Record<UnderlyingId, number>
-    for (const id of UNDERLYING_ORDER) out[id] = deposits[id].selected ? deposits[id].amountUsd : 0
+    for (const id of CATALOG_ORDER) out[id] = deposits[id].selected ? deposits[id].amountUsd : 0
     return out
   }, [deposits])
 
@@ -821,7 +856,7 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
   )
 
   const collateral = useMemo(() => buildCollateralFromDeposits(depositsRecord), [depositsRecord])
-  const capacity = useMemo(() => maxBorrowUsd(collateral, HERO_UNDERLYINGS, MARKET), [collateral])
+  const capacity = useMemo(() => maxBorrowUsd(collateral, CATALOG_UNDERLYINGS, MARKET), [collateral])
   const totalBorrowUsd = borrows.reduce((acc, b) => acc + b.amountUsd, 0)
   const projected = useMemo(() => projectIntentHf(depositsRecord, borrows), [depositsRecord, borrows])
   const validation = useMemo(() => validateIntent(config), [config])
@@ -850,7 +885,7 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
       assessPosition({
         collateral,
         debts: buildDebtsFromIntent(borrows),
-        underlyings: HERO_UNDERLYINGS,
+        underlyings: CATALOG_UNDERLYINGS,
         targetWeights,
         market: MARKET,
         signals: HERO_SIGNALS,
@@ -939,7 +974,7 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
             0x
           </span>
           <span className="advisor-topbar-divider" aria-hidden="true" />
-          <span className="advisor-topbar-label">Robo-Advisor</span>
+          <span className="advisor-topbar-label">Stock Credit</span>
         </header>
 
         <div className="advisor-body">

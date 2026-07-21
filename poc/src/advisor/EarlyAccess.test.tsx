@@ -68,7 +68,7 @@ describe('AdvisorApp — early access gate', () => {
     expect(init.headers).toMatchObject({ 'Content-Type': 'application/json', Accept: 'application/json' })
     const body = JSON.parse(init.body)
     expect(body.email).toBe('trader@example.com')
-    expect(body.source).toBe('0x-credit robo-advisor early access')
+    expect(body.source).toBe('0x-credit stock credit early access')
     expect(body.deposits).toContain('NVDA')
     expect(body.mode).toBe('semi')
   })

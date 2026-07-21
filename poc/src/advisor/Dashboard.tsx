@@ -8,9 +8,9 @@ import {
   HERO_BORROW_APR,
   HERO_NOW,
   HERO_SIGNALS,
-  HERO_UNDERLYINGS,
   HERO_USDE_PRICE,
 } from '../lib/advisor/fixtures/heroScenario'
+import { CATALOG_UNDERLYINGS } from '../lib/advisor/catalog/realTokens'
 import {
   buildCollateralFromDeposits,
   buildDebtsFromIntent,
@@ -22,13 +22,28 @@ import type { CollateralPosition, DebtPosition, UnderlyingId } from '../lib/advi
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
-const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
+const UNDERLYING_ORDER: UnderlyingId[] = [
+  'EQUITY:NVDA',
+  'EQUITY:SPY',
+  'EQUITY:AAPL',
+  'EQUITY:SPACEX',
+  'RWA:MTBILL',
+  'RWA:BUIDL',
+  'RWA:MBASIS',
+]
 
 const SERIES_COLOR: Record<UnderlyingId, string> = {
   'EQUITY:NVDA': '#7DA2FF',
   'EQUITY:SPY': '#34D399',
   'EQUITY:AAPL': '#FBBF24',
   'EQUITY:SPACEX': '#C084FC',
+}
+
+/** Fallback basket-chart color for underlyings without a dedicated series color (e.g. the RWA catalog). */
+const FALLBACK_SERIES_COLOR = '#64748B'
+
+function seriesColorFor(id: UnderlyingId): string {
+  return SERIES_COLOR[id] ?? FALLBACK_SERIES_COLOR
 }
 
 const MODE_LABEL: Record<IntentConfig['mode'], string> = {
@@ -68,13 +83,13 @@ function formatPct(value: number): string {
  */
 function proposalTitle(proposal: Proposal, showProviderSymbol = false): string {
   if (proposal.kind === 'reduce_weight') {
-    const symbol = proposal.underlyingId ? HERO_UNDERLYINGS[proposal.underlyingId]?.symbol ?? proposal.underlyingId : ''
+    const symbol = proposal.underlyingId ? CATALOG_UNDERLYINGS[proposal.underlyingId]?.symbol ?? proposal.underlyingId : ''
     return `Reduce ${symbol} exposure`
   }
   if (proposal.kind === 'provider_diversify') {
     const base = 'Diversify provider concentration'
     if (!showProviderSymbol) return base
-    const symbol = proposal.underlyingId ? HERO_UNDERLYINGS[proposal.underlyingId]?.symbol ?? proposal.underlyingId : ''
+    const symbol = proposal.underlyingId ? CATALOG_UNDERLYINGS[proposal.underlyingId]?.symbol ?? proposal.underlyingId : ''
     return symbol ? `${base} · ${symbol}` : base
   }
   if (proposal.kind === 'refinance_stablecoin') return `Refinance ${proposal.params.fromStablecoin ?? ''} borrow`
@@ -163,7 +178,7 @@ function ProposalCard({
           )}
           {proposal.kind === 'reduce_weight' && proposal.underlyingId && (
             <label className="advisor-weight-edit">
-              Target {HERO_UNDERLYINGS[proposal.underlyingId].symbol} weight
+              Target {CATALOG_UNDERLYINGS[proposal.underlyingId].symbol} weight
               <div className="advisor-weight-edit-row">
                 <input
                   type="number"
@@ -232,7 +247,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     const initialAssessment = assessPosition({
       collateral: buildCollateralFromDeposits(intent.deposits),
       debts: buildDebtsFromIntent(intent.borrows),
-      underlyings: HERO_UNDERLYINGS,
+      underlyings: CATALOG_UNDERLYINGS,
       targetWeights,
       market: MARKET,
       signals: HERO_SIGNALS,
@@ -259,7 +274,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
       assessPosition({
         collateral: effectiveCollateral,
         debts,
-        underlyings: HERO_UNDERLYINGS,
+        underlyings: CATALOG_UNDERLYINGS,
         targetWeights,
         market: MARKET,
         signals: HERO_SIGNALS,
@@ -279,7 +294,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
   const blendedApr =
     totalBorrowed === 0 ? 0 : debts.reduce((acc, d) => acc + d.amount * d.priceUsd * HERO_BORROW_APR[d.stablecoin], 0) / totalBorrowed
 
-  const capacity = useMemo(() => maxBorrowUsd(effectiveCollateral, HERO_UNDERLYINGS, MARKET), [effectiveCollateral])
+  const capacity = useMemo(() => maxBorrowUsd(effectiveCollateral, CATALOG_UNDERLYINGS, MARKET), [effectiveCollateral])
   const capacityPct = capacity === 0 ? 0 : (totalBorrowed / capacity) * 100
   const capacityColor = capacityPct > 90 ? 'bad' : capacityPct > 70 ? 'warn' : 'good'
 
@@ -307,7 +322,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     const currentWeight = underlyingRawValueUsd(effectiveCollateral, proposal.underlyingId) / rawTotal
     const valueUsd = Math.max(0, (currentWeight - weight) * rawTotal)
     const mutated = rotateExposure(effectiveCollateral, proposal.underlyingId, proposal.params.intoUnderlyingId, valueUsd)
-    return computeHealthFactor({ collateral: mutated, debts, underlyings: HERO_UNDERLYINGS, market: MARKET })
+    return computeHealthFactor({ collateral: mutated, debts, underlyings: CATALOG_UNDERLYINGS, market: MARKET })
   }
 
   const approveProposal = (proposal: Proposal) => {
@@ -390,7 +405,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
             0x
           </span>
           <span className="advisor-brand">0x.credit</span>
-          <span className="advisor-brand-sub">Robo-Advisor</span>
+          <span className="advisor-brand-sub">Stock Credit</span>
         </div>
         <div className="advisor-dash-header-right">
           <span className="advisor-status-pill">
@@ -489,12 +504,12 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
               const breached = drift?.breached ?? false
               return (
                 <div key={id} className="advisor-basket-row">
-                  <span className="advisor-asset-dot" style={{ background: SERIES_COLOR[id] }} />
-                  <span className="advisor-basket-symbol">{HERO_UNDERLYINGS[id].symbol}</span>
+                  <span className="advisor-asset-dot" style={{ background: seriesColorFor(id) }} />
+                  <span className="advisor-basket-symbol">{CATALOG_UNDERLYINGS[id].symbol}</span>
                   <span className="advisor-basket-bar">
                     <span
                       className="advisor-basket-bar-fill"
-                      style={{ width: `${current * 100}%`, background: SERIES_COLOR[id] }}
+                      style={{ width: `${current * 100}%`, background: seriesColorFor(id) }}
                     />
                     <span className="advisor-basket-bar-tick" style={{ left: `${target * 100}%` }} />
                   </span>
@@ -536,7 +551,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
                 <div>
                   <p className="advisor-signal-label">{s.sourceLabel}</p>
                   <p className="advisor-signal-meta">
-                    {HERO_UNDERLYINGS[s.asset]?.symbol ?? s.asset} · {s.signalType} · value {s.value.toFixed(2)} · confidence{' '}
+                    {CATALOG_UNDERLYINGS[s.asset]?.symbol ?? s.asset} · {s.signalType} · value {s.value.toFixed(2)} · confidence{' '}
                     {s.confidence.toFixed(2)}
                   </p>
                 </div>

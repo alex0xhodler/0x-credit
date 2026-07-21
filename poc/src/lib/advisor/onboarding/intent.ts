@@ -11,7 +11,8 @@ import { computeHealthFactor, PRIVATE_EQUITY_ORIGINATION_HF, type HealthFactorRe
 import { collateralValueUsd } from '../domain/collateralValue'
 import { ltvParamsFor } from '../domain/ltv'
 import { effectiveDebtValueUsd, isBorrowPaused, STABLECOIN_CONFIG, validateBorrowShares } from '../domain/stablecoin'
-import { HERO_COLLATERAL, HERO_NOW, HERO_UNDERLYINGS, HERO_USDE_PRICE } from '../fixtures/heroScenario'
+import { HERO_COLLATERAL, HERO_NOW, HERO_USDE_PRICE } from '../fixtures/heroScenario'
+import { CATALOG_UNDERLYINGS, REAL_PROVIDER_TOKENS } from '../catalog/realTokens'
 
 /**
  * Onboarding intent — a wizard-editable description of a prospective position
@@ -69,9 +70,12 @@ export interface ProviderSplit {
 const UNIT_PRICE_USD = 100
 
 /**
- * Per-underlying provider splits, derived from {@link HERO_COLLATERAL} so the
- * fixture stays the single source of truth for token addresses, issuers, and
- * risk scores — this module never re-declares them.
+ * Per-underlying provider splits, derived from {@link HERO_COLLATERAL} (hero
+ * equities) and {@link REAL_PROVIDER_TOKENS} (real RWA catalog) so this
+ * module never re-declares token addresses, issuers, or risk scores. Each
+ * RWA underlying has exactly one issuer today, so it gets a single 100%-share
+ * split — the same shape a multi-provider hero underlying gets from its
+ * fixture positions.
  */
 function buildProviderSplits(): Record<UnderlyingId, ProviderSplit[]> {
   const byUnderlying = new Map<UnderlyingId, CollateralPosition[]>()
@@ -89,15 +93,26 @@ function buildProviderSplits(): Record<UnderlyingId, ProviderSplit[]> {
       share: total === 0 ? 0 : (p.quantity * p.priceUsd) / total,
     }))
   }
+
+  for (const token of REAL_PROVIDER_TOKENS) {
+    splits[token.underlyingId] = [{ token, share: 1 }]
+  }
+
   return splits
 }
 
 export const PROVIDER_SPLITS: Record<UnderlyingId, ProviderSplit[]> = buildProviderSplits()
 
-/** Each provider token's original `priceAsOf`, preserved from the fixture (e.g. the SpaceX NAV token's 1h-old feed). */
-const PRICE_AS_OF_BY_ADDRESS: Record<string, number> = Object.fromEntries(
-  HERO_COLLATERAL.map(position => [position.token.address, position.priceAsOf]),
-)
+/**
+ * Each provider token's original `priceAsOf`, preserved from the fixture
+ * (e.g. the SpaceX NAV token's 1h-old feed) or, for the RWA catalog, pinned
+ * fresh at {@link HERO_NOW} — the demo has no live NAV feed to poll, and a
+ * synthetic stale price would misleadingly trigger the stale-NAV haircut.
+ */
+const PRICE_AS_OF_BY_ADDRESS: Record<string, number> = Object.fromEntries([
+  ...HERO_COLLATERAL.map(position => [position.token.address, position.priceAsOf]),
+  ...REAL_PROVIDER_TOKENS.map(token => [token.address, HERO_NOW]),
+])
 
 /**
  * Builds token-level collateral positions from per-underlying deposit
@@ -194,7 +209,7 @@ export function projectIntentHf(
   return computeHealthFactor({
     collateral,
     debts,
-    underlyings: HERO_UNDERLYINGS,
+    underlyings: CATALOG_UNDERLYINGS,
     market: HERO_MARKET,
   })
 }
@@ -245,7 +260,7 @@ export function usdcForTargetHf(
   const { riskAdjustedCollateralUsd } = computeHealthFactor({
     collateral,
     debts: [],
-    underlyings: HERO_UNDERLYINGS,
+    underlyings: CATALOG_UNDERLYINGS,
     market: HERO_MARKET,
   })
   const otherEffectiveDebtUsd = buildDebtsFromIntent(otherBorrows).reduce(
@@ -269,12 +284,12 @@ const MAX_PRESET_PRIVATE_EQUITY_TARGET_HF = 1.501
  */
 export function maxUsdcBorrowUsd(deposits: Record<UnderlyingId, number>, otherBorrows: readonly IntentBorrow[]): number {
   const collateral = buildCollateralFromDeposits(deposits)
-  const capacity = maxBorrowUsd(collateral, HERO_UNDERLYINGS, HERO_MARKET)
+  const capacity = maxBorrowUsd(collateral, CATALOG_UNDERLYINGS, HERO_MARKET)
   const otherFaceUsd = otherBorrows.reduce((acc, b) => acc + b.amountUsd, 0)
   const remainingCapacity = capacity - otherFaceUsd
 
   const hasPrivateEquityDeposit = Object.entries(deposits).some(
-    ([underlyingId, value]) => value > 0 && HERO_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
+    ([underlyingId, value]) => value > 0 && CATALOG_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
   )
   const privateEquityBound = hasPrivateEquityDeposit
     ? usdcForTargetHf(deposits, otherBorrows, MAX_PRESET_PRIVATE_EQUITY_TARGET_HF)
@@ -342,7 +357,7 @@ export function validateIntent(config: IntentConfig): IntentValidationResult {
 
   const collateral = buildCollateralFromDeposits(config.deposits)
   const debts = buildDebtsFromIntent(config.borrows)
-  const capacity = maxBorrowUsd(collateral, HERO_UNDERLYINGS, market)
+  const capacity = maxBorrowUsd(collateral, CATALOG_UNDERLYINGS, market)
   const totalBorrowUsd = config.borrows.reduce((acc, b) => acc + b.amountUsd, 0)
 
   if (totalBorrowUsd > capacity) {
@@ -364,10 +379,10 @@ export function validateIntent(config: IntentConfig): IntentValidationResult {
   }
 
   const holdsPrivateEquity = Object.entries(config.deposits).some(
-    ([underlyingId, value]) => value > 0 && HERO_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
+    ([underlyingId, value]) => value > 0 && CATALOG_UNDERLYINGS[underlyingId]?.tier === 'private_equity',
   )
   if (holdsPrivateEquity) {
-    const projected = computeHealthFactor({ collateral, debts, underlyings: HERO_UNDERLYINGS, market })
+    const projected = computeHealthFactor({ collateral, debts, underlyings: CATALOG_UNDERLYINGS, market })
     if (projected.healthFactor < PRIVATE_EQUITY_ORIGINATION_HF) {
       errors.push({
         code: 'private_equity_min_hf',

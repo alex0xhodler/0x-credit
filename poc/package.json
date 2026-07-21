@@ -15,7 +15,7 @@
     "@fontsource/league-gothic": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",
-    "@gearbox-protocol/sdk": "^14.10.0",
+    "@gearbox-protocol/sdk": "^14.11.12",
     "@reown/appkit": "1.8.19",
     "@reown/appkit-adapter-wagmi": "1.8.19",
     "@tanstack/react-query": "5.90.3",

@@ -616,3 +616,30 @@ re-activation after Reconfigure must not re-gate an already-submitted lead
 (persisted flag); submit failures need a visible retry state, not a dead
 button; the nav link must not disturb the cockpit tablist's keyboard/ARIA
 behavior (separate anchor, not a new tab in the tablist).
+
+## Round 5: post-merge continuation (branch restarted from main @ 50de0d3)
+
+Scope: (1) SDK submodule advanced 51 commits to latest master (4b400b24) and
+npm SDK bump toward 14.11.x; (2) replace mock stock catalog with real
+SDK-supported tokens (research pass first — Midas RWA adapter looks like the
+richest source); (3) reframe the nav entry as a distinct product ("Stock
+Credit" — on-brand with 0x.credit) in its own header cluster with subline and
+Early access tag, instead of a third strategy tab. Risks considered up front:
+npm SDK bump may carry breaking API changes into poc/src/lib/gearbox (gate
+catches); real token addresses must come from SDK data, never hand-typed;
+the advisor engine's tier/LTV table stays authoritative for demo risk params
+unless real market LTs are cleanly available; catalog swap must not break the
+pinned hero-fixture equivalence tests (fixture stays the demo baseline —
+real tokens ADD to the catalog rather than rewriting the hero scenario,
+unless research shows a clean full swap).
+
+## Round 5 outcome
+
+Research confirmed the SDK has no tokenized equities and no static token list;
+the honest integration was tokenized treasuries via the SDK's new Midas +
+Securitize adapters. Shipped: SDK bumped 14.10.0 → 14.11.12 (drop-in,
+verified), submodule advanced to v14.11.12 (4b400b24), real RWA catalog
+(mTBILL / mBASIS / BUIDL, Etherscan-verified addresses, new treasury tier
+80/88) with truthful "Live on Gearbox · via SDK adapters" vs "Illustrative"
+badges, and the nav reframed as the distinct "Stock Credit" product entry
+with subline. 225 tests green; engine LTV math verified in-browser.

@@ -106,6 +106,37 @@ describe('Onboarding — screen 1: build your position', () => {
     expect(hf).toBeLessThan(1.65)
   })
 
+  it('renders a tokenized-treasuries section below the stocks with mTBILL, BUIDL, and mBASIS, each badged', () => {
+    renderApp()
+
+    expect(screen.getByRole('checkbox', { name: /^select mtbill$/i })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /^select buidl$/i })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /^select mbasis$/i })).toBeInTheDocument()
+
+    expect(screen.getByRole('heading', { level: 3, name: /^tokenized stocks$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 3, name: /^tokenized treasuries$/i })).toBeInTheDocument()
+    expect(screen.getByText(/illustrative/i)).toBeInTheDocument()
+    expect(screen.getByText(/live on gearbox/i)).toBeInTheDocument()
+
+    within(stockRow('mTBILL')).getByText('Treasury')
+  })
+
+  it('selecting mTBILL and depositing $1,000,000, then applying the Balanced preset, projects HF near 1.6', () => {
+    renderApp()
+    selectStock('mTBILL')
+    setDepositByTyping('mTBILL', '1000000')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Balanced' }))
+
+    const usdcInput = screen.getByLabelText(/usdc borrow amount/i) as HTMLInputElement
+    expect(parseFloat(usdcInput.value.replace(/[^0-9.]/g, ''))).toBeGreaterThan(0)
+
+    const hf = Number(screen.getByTestId('screen1-hf-value').textContent)
+    expect(hf).toBeGreaterThan(1.55)
+    expect(hf).toBeLessThan(1.65)
+    expect(screen.getByRole('button', { name: /continue to mandate/i })).toBeEnabled()
+  })
+
   it('enabling USDT shows its input with a live max hint, and an over-cap amount is clamped on blur', () => {
     renderApp()
     selectStock('NVDA')

@@ -18,6 +18,7 @@ export type UnderlyingTier =
   | 'index_etf' // Index / ETF token — tSPY, tQQQ
   | 'small_mid_cap' // Higher-volatility public equity
   | 'private_equity' // e.g. SpaceX — illiquid, bespoke NAV pricing
+  | 'treasury' // Tokenized US Treasury / cash-equivalent products — mTBILL, mBASIS, BUIDL; the safest collateral tier
 
 /**
  * Protocol-assigned provider score (1–5) reflecting issuer credit risk,

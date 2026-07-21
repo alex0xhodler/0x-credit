@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { AdvisorApp } from './AdvisorApp'
+
+beforeEach(() => {
+  localStorage.clear()
+})
 
 function renderDashboard() {
   render(<AdvisorApp />)
@@ -12,6 +16,19 @@ function expandProposal(testId: string) {
   const card = screen.getByTestId(testId)
   const toggle = within(card).getByRole('button', { expanded: false })
   fireEvent.click(toggle)
+}
+
+/** Builds a valid position from a treasury deposit, bypassing the early-access gate, and activates into the dashboard. */
+function activateWithMtbillDeposit() {
+  localStorage.setItem('advisor-early-access-submitted', '1')
+  render(<AdvisorApp />)
+  fireEvent.click(screen.getByRole('checkbox', { name: /^select mtbill$/i }))
+  const input = screen.getByLabelText(/mtbill deposit amount/i)
+  fireEvent.change(input, { target: { value: '2000000' } })
+  fireEvent.blur(input)
+  fireEvent.click(screen.getByRole('button', { name: /continue to mandate/i }))
+  fireEvent.click(screen.getByRole('button', { name: /continue to review/i }))
+  fireEvent.click(screen.getByTestId('activate-agent'))
 }
 
 describe('Dashboard', () => {
@@ -30,6 +47,17 @@ describe('Dashboard', () => {
     expect(within(basket).getByText('SPY')).toBeInTheDocument()
     expect(within(basket).getByText('AAPL')).toBeInTheDocument()
     expect(within(basket).getByText('SPACEX')).toBeInTheDocument()
+  })
+
+  it('renders a deposited RWA underlying in the basket with a fallback series color', () => {
+    activateWithMtbillDeposit()
+
+    const basket = screen.getByTestId('basket-panel')
+    expect(within(basket).getByText('mTBILL')).toBeInTheDocument()
+
+    const row = within(basket).getByText('mTBILL').closest('.advisor-basket-row') as HTMLElement
+    const dot = row.querySelector('.advisor-asset-dot') as HTMLElement
+    expect(dot.style.background).toBe('rgb(100, 116, 139)') // #64748B fallback — mTBILL has no dedicated series color
   })
 
   it('surfaces the NVDA proposal first and already expanded', () => {
