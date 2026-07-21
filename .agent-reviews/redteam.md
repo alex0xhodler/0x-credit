@@ -606,3 +606,13 @@ detail; Balanced preset lands HF at exactly 1.60; USDC-anchor borrow with
 share-cap-clamped USDT/USDe adds; review preview reflects the user's own
 position (57%→44% NVDA rotation); dashboard restyled to the cockpit language
 with all behavioral testids intact. 203 tests green.
+
+## Round 4: early-access gate + nav entry (small increment, no formal critic round)
+
+Scope judged proportionate to skip a full critic pass. Risks considered by the
+builder up front: Formspree POST must be mocked in tests (no network in CI);
+the gate must not break skip-demo (demo path stays direct to dashboard);
+re-activation after Reconfigure must not re-gate an already-submitted lead
+(persisted flag); submit failures need a visible retry state, not a dead
+button; the nav link must not disturb the cockpit tablist's keyboard/ARIA
+behavior (separate anchor, not a new tab in the tablist).

@@ -949,6 +949,56 @@
 }
 
 /* ==========================================================================
+   Early access gate — lead-capture screen shown between activation and the
+   dashboard, lifted from the Review screen's summary and form conventions.
+   ========================================================================== */
+
+.advisor-agent-summary {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 0 0 24px;
+}
+
+.advisor-agent-summary .advisor-overline {
+  margin-bottom: 10px;
+}
+
+.advisor-early-access-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.advisor-early-access-error {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--ember);
+}
+
+.advisor-early-access-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.advisor-early-access-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.advisor-early-access-check-mark {
+  color: var(--good);
+  font-weight: 700;
+}
+
+/* ==========================================================================
    Dashboard — restyled into the cockpit language; structure, testids, and
    behavior are unchanged from Pass B.
    ========================================================================== */

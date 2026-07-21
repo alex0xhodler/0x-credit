@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { AdvisorApp } from './AdvisorApp'
+
+beforeEach(() => {
+  localStorage.clear()
+})
 
 function renderApp() {
   return render(<AdvisorApp />)
@@ -177,7 +181,7 @@ describe('Onboarding — screen 3: review & activate', () => {
     expect(within(preview).getByText(/what your agent watches/i)).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('activate-agent'))
-    expect(screen.getByTestId('hf-gauge')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /get early access/i })).toBeInTheDocument()
   })
 
   it('shows the exec steps with step 3 active after navigating through all screens', () => {

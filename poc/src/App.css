@@ -1402,11 +1402,50 @@ button {
   text-transform: uppercase;
 }
 
+/* Right-side header cluster: strategy tabs + advisor nav link */
+.header-right-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 /* Strategy tabs */
 .strategy-tabs {
   display: flex;
   gap: 6px;
   min-width: 0;
+}
+
+.advisor-nav-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--button-radius);
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 160ms;
+}
+
+.advisor-nav-link:hover {
+  border-color: var(--line-strong);
+}
+
+.advisor-nav-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--button-radius);
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .strategy-tab {
@@ -2276,8 +2315,13 @@ button {
     font-size: 0.68rem;
   }
 
-  .strategy-tabs {
+  .header-right-cluster {
     grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .strategy-tabs {
     flex-wrap: wrap;
   }
 
@@ -2323,9 +2367,13 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .strategy-tabs {
+  .header-right-cluster {
     grid-column: 1;
     grid-row: 2;
+    width: 100%;
+  }
+
+  .strategy-tabs {
     flex-wrap: nowrap;
     width: 100%;
   }

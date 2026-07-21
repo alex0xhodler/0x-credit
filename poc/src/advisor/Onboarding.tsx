@@ -309,7 +309,8 @@ function Screen1({
       <section className="advisor-pane-content">
         <h2>Build your position</h2>
         <p className="advisor-explainer">
-          Pick tokenized stocks, set deposits, and choose how much to borrow. Your agent handles providers and routing.
+          A robo-advisor in reverse: instead of paying cash for a managed basket, you deposit tokenized stocks and
+          borrow stablecoins against them — while your agent manages the risk.
         </p>
 
         {appliedChangesNotice > 0 && (
