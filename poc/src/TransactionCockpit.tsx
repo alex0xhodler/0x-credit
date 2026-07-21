@@ -411,31 +411,38 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             {topbarVariant === 'portfolio' && <span>Portfolio allocation</span>}
           </div>
 
-          <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
-            {opportunities.map((opp, index) => (
-              <button
-                aria-controls={strategyPanelId}
-                aria-selected={opp.id === opportunity.id}
-                id={`${strategyTabListId}-tab-${index}`}
-                key={opp.id}
-                role="tab"
-                className={`strategy-tab ${chainTone(opp.chainName)} ${opp.id === opportunity.id ? 'active' : ''}`}
-                onClick={() => onSelectOpportunity?.(opp)}
-                onKeyDown={event => handleStrategyKeyDown(event, index)}
-                ref={element => {
-                  strategyTabRefs.current[index] = element
-                }}
-                tabIndex={opp.id === opportunity.id ? 0 : -1}
-                type="button"
-              >
-                <TokenIcon symbol={opp.tokenSymbol} />
-                <span>{opp.tokenSymbol}</span>
-                {opp.apyPercent !== undefined
-                  ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
-                  : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
-                }
-              </button>
-            ))}
+          <div className="header-right-cluster">
+            <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
+              {opportunities.map((opp, index) => (
+                <button
+                  aria-controls={strategyPanelId}
+                  aria-selected={opp.id === opportunity.id}
+                  id={`${strategyTabListId}-tab-${index}`}
+                  key={opp.id}
+                  role="tab"
+                  className={`strategy-tab ${chainTone(opp.chainName)} ${opp.id === opportunity.id ? 'active' : ''}`}
+                  onClick={() => onSelectOpportunity?.(opp)}
+                  onKeyDown={event => handleStrategyKeyDown(event, index)}
+                  ref={element => {
+                    strategyTabRefs.current[index] = element
+                  }}
+                  tabIndex={opp.id === opportunity.id ? 0 : -1}
+                  type="button"
+                >
+                  <TokenIcon symbol={opp.tokenSymbol} />
+                  <span>{opp.tokenSymbol}</span>
+                  {opp.apyPercent !== undefined
+                    ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
+                    : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
+                  }
+                </button>
+              ))}
+
+              <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
+                Robo-Advisor
+                <span className="advisor-nav-tag">Early access</span>
+              </a>
+            </div>
           </div>
 
         </header>
