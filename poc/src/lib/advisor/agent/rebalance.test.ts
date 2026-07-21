@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   adjustUnderlyingValue,
+  applyRefinance,
   applyRepayment,
   rotateExposure,
   underlyingRawValueUsd,
@@ -81,5 +82,28 @@ describe('applyRepayment', () => {
   it('caps repayment at the outstanding amount', () => {
     const next = applyRepayment(debts, 'USDe', 999_999_999)
     expect(next.find(d => d.stablecoin === 'USDe')!.amount).toBeCloseTo(0, 6)
+  })
+})
+
+describe('applyRefinance', () => {
+  const debts: DebtPosition[] = [
+    { stablecoin: 'USDC', amount: 500_000, priceUsd: 1 },
+    { stablecoin: 'USDe', amount: 200_000, priceUsd: 1 },
+  ]
+
+  it('moves debt notional from one stablecoin into another', () => {
+    const next = applyRefinance(debts, 'USDe', 'USDC')
+    expect(next.some(d => d.stablecoin === 'USDe')).toBe(false)
+    expect(next.find(d => d.stablecoin === 'USDC')!.amount).toBeCloseTo(700_000, 4)
+  })
+
+  it('creates the target position when none exists', () => {
+    const next = applyRefinance(debts, 'USDe', 'USDT')
+    expect(next.find(d => d.stablecoin === 'USDT')!.amount).toBeCloseTo(200_000, 4)
+  })
+
+  it('is a no-op when there is nothing to move', () => {
+    const next = applyRefinance(debts, 'USDT', 'USDC')
+    expect(next.find(d => d.stablecoin === 'USDC')!.amount).toBeCloseTo(500_000, 4)
   })
 })

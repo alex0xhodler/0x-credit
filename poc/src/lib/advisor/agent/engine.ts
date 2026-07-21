@@ -2,6 +2,7 @@ import type {
   CollateralPosition,
   DebtPosition,
   MarketContext,
+  Stablecoin,
   Underlying,
   UnderlyingId,
 } from '../types'
@@ -19,7 +20,12 @@ import {
   type ConcentrationWarning,
   type DriftEntry,
 } from '../domain/basket'
-import { rawValueUsd, rotateExposure, underlyingRawValueUsd } from './rebalance'
+import {
+  computeReflexiveExposure,
+  type IssuerReflexiveWarning,
+  type StablecoinIssuerBacking,
+} from '../domain/correlation'
+import { applyRefinance, rawValueUsd, rotateExposure, underlyingRawValueUsd } from './rebalance'
 import { activeSignals, signalsForAsset, weightedRiskScore, type SignalFeed } from './signals'
 
 /** Maximum upward shift of the intervention HF under full risk-off pressure. */
@@ -31,7 +37,7 @@ export const STRONG_SIGNAL = 0.6
 /** Maximum weight (basket fraction) a single signal-driven reduction may trim. */
 export const MAX_SIGNAL_REDUCTION = 0.15
 
-export type ProposalKind = 'reduce_weight' | 'provider_diversify'
+export type ProposalKind = 'reduce_weight' | 'provider_diversify' | 'refinance_stablecoin'
 
 export type Urgency = 'low' | 'medium' | 'high'
 
@@ -48,12 +54,17 @@ export interface ProposalParams {
   fromProviderShare?: number
   /** For diversification: target top-provider share. */
   toProviderShare?: number
+  /** For refinancing: stablecoin being moved out of. */
+  fromStablecoin?: Stablecoin
+  /** For refinancing: stablecoin being moved into. */
+  toStablecoin?: Stablecoin
 }
 
 export interface Proposal {
   id: string
   kind: ProposalKind
-  underlyingId: UnderlyingId
+  /** Present for collateral-side proposals; omitted for debt-side actions. */
+  underlyingId?: UnderlyingId
   params: ProposalParams
   /** Plain-language rationale (deterministic; the LLM layer enriches this). */
   rationale: string
@@ -75,6 +86,8 @@ export interface PositionState {
   targetWeights: Record<UnderlyingId, number>
   market: MarketContext
   signals: readonly SignalFeed[]
+  /** Declared stablecoin reserve backings, for reflexive-risk detection. */
+  stablecoinBackings?: readonly StablecoinIssuerBacking[]
   /** Base intervention HF for this mandate (default institutional 1.20). */
   interventionHf?: number
   /** Drift band for rebalancing (default ±5%). */
@@ -88,6 +101,8 @@ export interface Assessment {
   effectiveInterventionHf: number
   drift: DriftEntry[]
   concentrationWarnings: ConcentrationWarning[]
+  /** Wrong-way / reflexive single-issuer concentration warnings. */
+  reflexiveWarnings: IssuerReflexiveWarning[]
   proposals: Proposal[]
 }
 
@@ -157,6 +172,13 @@ export function assessPosition(state: PositionState): Assessment {
   const aggregate = aggregateBasket(state.collateral, market)
   const drift = driftReport(aggregate.byUnderlying, state.targetWeights, state.driftBand)
   const concentrationWarnings = providerConcentrationWarnings(aggregate.byUnderlying)
+  const backings = state.stablecoinBackings ?? []
+  const reflexiveWarnings = computeReflexiveExposure({
+    collateral: state.collateral,
+    debts: state.debts,
+    backings,
+    market,
+  })
 
   const thresholds = weightedLiqThresholdByUnderlying(result)
   const rawTotal = state.collateral.reduce((acc, p) => acc + rawValueUsd(p), 0)
@@ -227,6 +249,44 @@ export function assessPosition(state: PositionState): Assessment {
     })
   }
 
+  // Reflexive loop → refinance the affected stablecoin into USDC to break the
+  // shared issuer dependency between collateral and borrowed liability.
+  const reflexiveIssuers = new Set(reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer))
+  const affectedStablecoins = new Set<Stablecoin>(
+    backings.filter(b => reflexiveIssuers.has(b.issuer)).map(b => b.stablecoin),
+  )
+  for (const stablecoin of affectedStablecoins) {
+    if (stablecoin === 'USDC') continue
+    const owedUsd = state.debts
+      .filter(d => d.stablecoin === stablecoin)
+      .reduce((acc, d) => acc + d.amount * d.priceUsd, 0)
+    if (owedUsd === 0) continue
+
+    const mutated = applyRefinance(state.debts, stablecoin, 'USDC')
+    const projected = computeHealthFactor({
+      collateral: state.collateral,
+      debts: mutated,
+      underlyings: state.underlyings,
+      market,
+    })
+    const issuers = reflexiveWarnings.filter(w => w.reflexive).map(w => w.issuer).join(', ')
+
+    proposals.push({
+      id: `refinance_stablecoin:${stablecoin}`,
+      kind: 'refinance_stablecoin',
+      params: { fromStablecoin: stablecoin, toStablecoin: 'USDC', valueUsd: owedUsd },
+      rationale:
+        `${stablecoin} borrow shares an issuer (${issuers}) with your collateral, so a single ` +
+        `issuer failure would hit both sides at once. Refinance ${stablecoin} debt into USDC to ` +
+        `break the loop.`,
+      contributingSignals: [],
+      projectedHf: projected.healthFactor,
+      projectedHfDelta: projected.healthFactor - result.healthFactor,
+      urgency: 'high',
+      requiresApproval: false,
+    })
+  }
+
   proposals.sort((a, b) => {
     const rank = URGENCY_RANK[b.urgency] - URGENCY_RANK[a.urgency]
     return rank !== 0 ? rank : b.projectedHfDelta - a.projectedHfDelta
@@ -238,6 +298,7 @@ export function assessPosition(state: PositionState): Assessment {
     effectiveInterventionHf: effHf,
     drift,
     concentrationWarnings,
+    reflexiveWarnings,
     proposals,
   }
 }

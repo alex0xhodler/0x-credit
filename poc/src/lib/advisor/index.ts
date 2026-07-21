@@ -14,6 +14,7 @@ export * from './domain/stablecoin'
 export * from './domain/collateralValue'
 export * from './domain/healthFactor'
 export * from './domain/basket'
+export * from './domain/correlation'
 
 // Agent (assessment + editable proposals)
 export * from './agent/signals'

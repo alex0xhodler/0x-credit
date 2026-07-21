@@ -64,3 +64,29 @@ export function applyRepayment(
     return { ...d, amount: d.amount - repayUnits }
   })
 }
+
+/**
+ * Refinances all debt from one stablecoin into another at current prices,
+ * preserving USD notional — the primitive for breaking a reflexive borrow loop
+ * (e.g. moving USDe debt into USDC). `toPriceUsd` defaults to the moved coin's
+ * price if a `to` position already exists, else parity.
+ */
+export function applyRefinance(
+  debts: readonly DebtPosition[],
+  from: Stablecoin,
+  to: Stablecoin,
+): DebtPosition[] {
+  if (from === to) return debts.map(d => ({ ...d }))
+
+  const movedUsd = debts
+    .filter(d => d.stablecoin === from)
+    .reduce((acc, d) => acc + d.amount * d.priceUsd, 0)
+  if (movedUsd === 0) return debts.map(d => ({ ...d }))
+
+  const toPriceUsd = debts.find(d => d.stablecoin === to)?.priceUsd ?? 1
+  const kept = debts.filter(d => d.stablecoin !== from).map(d => ({ ...d }))
+  const existingTo = kept.find(d => d.stablecoin === to)
+  if (existingTo) existingTo.amount += movedUsd / toPriceUsd
+  else kept.push({ stablecoin: to, amount: movedUsd / toPriceUsd, priceUsd: toPriceUsd })
+  return kept
+}
