@@ -597,3 +597,12 @@ raised 8 objections against the builder's rework plan.
 Decision: proceed. Pass C1 = engine zero-debt gate + intent reshape (TDD);
 Pass C2 = cockpit-language restyle + combined screen 1 + dashboard restyle +
 test rewrite. Supervisor gates with browser screenshots after each pass.
+
+## Round 3 outcome
+
+Shipped in two gated passes (C1 engine/intent, C2 UI). Verified in-browser:
+selection-first screen 1 with per-stock deposits and engine-real max-LTV
+detail; Balanced preset lands HF at exactly 1.60; USDC-anchor borrow with
+share-cap-clamped USDT/USDe adds; review preview reflects the user's own
+position (57%→44% NVDA rotation); dashboard restyled to the cockpit language
+with all behavioral testids intact. 203 tests green.

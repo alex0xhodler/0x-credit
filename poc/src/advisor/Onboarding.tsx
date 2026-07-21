@@ -5,14 +5,22 @@ import {
   DEFAULT_INTENT,
   derivedTargetWeights,
   maxBorrowUsd,
+  maxUsdcBorrowUsd,
+  maxUsdeFaceUsd,
+  maxUsdtFaceUsd,
   projectIntentHf,
+  PROVIDER_SPLITS,
+  RISK_PRESETS,
   totalDepositsUsd,
+  usdcForTargetHf,
   validateIntent,
   type IntentBorrow,
   type IntentConfig,
   type IntentValidationError,
 } from '../lib/advisor/onboarding/intent'
 import { assessPosition, type Assessment } from '../lib/advisor/agent/engine'
+import { hfStatus } from '../lib/advisor/domain/healthFactor'
+import { ltvParamsFor } from '../lib/advisor/domain/ltv'
 import {
   HERO_BORROW_APR,
   HERO_NOW,
@@ -20,41 +28,22 @@ import {
   HERO_UNDERLYINGS,
   HERO_USDE_PRICE,
 } from '../lib/advisor/fixtures/heroScenario'
-import type { Stablecoin, Underlying, UnderlyingId } from '../lib/advisor/types'
+import type { ProviderRiskScore, Stablecoin, Underlying, UnderlyingId } from '../lib/advisor/types'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
 const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
 
-const SERIES_COLOR: Record<UnderlyingId, string> = {
-  'EQUITY:NVDA': '#7DA2FF',
-  'EQUITY:SPY': '#34D399',
-  'EQUITY:AAPL': '#FBBF24',
-  'EQUITY:SPACEX': '#C084FC',
-}
-
-const TIER_LABEL: Record<Underlying['tier'], string> = {
+const TIER_CHIP_LABEL: Record<Underlying['tier'], string> = {
   blue_chip: 'Blue chip',
-  index_etf: 'Index',
-  small_mid_cap: 'Small/mid cap',
-  private_equity: 'Private',
+  index_etf: 'Index / ETF',
+  small_mid_cap: 'Small / mid cap',
+  private_equity: 'Private · manual approval only',
 }
 
-const STABLECOIN_ORDER: Stablecoin[] = ['USDC', 'USDT', 'USDe']
+const STEP_LABELS = ['Position', 'Mandate', 'Review']
 
-const STABLECOIN_TIER_LABEL: Record<Stablecoin, string> = {
-  USDC: 'Tier 1 · Fiat reserves',
-  USDT: 'Tier 2 · Fiat reserves',
-  USDe: 'Tier 3 · Synthetic',
-}
-
-const STABLECOIN_CAP_NOTE: Record<Stablecoin, string> = {
-  USDC: 'No cap',
-  USDT: 'Up to 60% of borrow',
-  USDe: 'Up to 40% of borrow',
-}
-
-const STEP_LABELS = ['Portfolio', 'Borrow', 'Mandate', 'Review']
+const DEPOSIT_PRESETS = [1_000_000, 2_500_000, 5_000_000]
 
 const MODE_COPY: Record<IntentConfig['mode'], { title: string; description: string }> = {
   manual: { title: 'Manual', description: 'Agent advises. You approve every action.' },
@@ -90,24 +79,16 @@ const PERMISSION_ROWS: { key: string; label: string; description: string }[] = [
   },
 ]
 
-const HF_METER_MIN = 0.8
-const HF_METER_MAX = 2.5
-
-const HF_TICKS = [
-  { value: 1.0, label: 'Liquidation 1.00' },
-  { value: 1.2, label: 'Intervention 1.20' },
-]
-
-/** Maps an HF value to its percent position along the meter track. */
-function hfTickPct(value: number): number {
-  return ((value - HF_METER_MIN) / (HF_METER_MAX - HF_METER_MIN)) * 100
-}
-
-const FRESH_BORROW_DEFAULTS: Record<Stablecoin, number> = { USDC: 3_000_000, USDT: 1_200_000, USDe: 800_000 }
-
 /** Formats a USD amount with commas and no decimals, e.g. `$12,500,000`. */
 function formatUsd(value: number): string {
   return value.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+}
+
+/** Formats a round-million USD amount compactly for preset pills, e.g. `$2.5M`. */
+function formatCompactUsd(value: number): string {
+  const millions = value / 1_000_000
+  const rounded = Number.isInteger(millions) ? millions.toFixed(0) : millions.toFixed(1)
+  return `$${rounded}M`
 }
 
 /** Strips non-digit characters from a raw input string and parses the remainder as a whole-dollar amount. */
@@ -116,444 +97,511 @@ function parseUsdInput(raw: string): number {
   return digits ? Number(digits) : 0
 }
 
-/**
- * Recovers step-1's local percent-slider representation from a confirmed
- * intent's deposits (e.g. when Reconfigure prefills the wizard).
- */
-function initialWeightPercents(config?: IntentConfig): Record<UnderlyingId, number> {
-  const deposits = config?.deposits ?? DEFAULT_INTENT.deposits
-  const total = totalDepositsUsd(deposits)
-  const out: Record<UnderlyingId, number> = {}
-  for (const id of UNDERLYING_ORDER) out[id] = total === 0 ? 0 : Math.round(((deposits[id] ?? 0) / total) * 100)
-  return out
+/** The highest provider risk score among an underlying's issued tokens, used for its catalog "Max LTV" figure. */
+function bestProviderScore(id: UnderlyingId): ProviderRiskScore {
+  const splits = PROVIDER_SPLITS[id] ?? []
+  let best: ProviderRiskScore = 1
+  for (const split of splits) {
+    if (split.token.providerRiskScore > best) best = split.token.providerRiskScore
+  }
+  return best
 }
 
-/** Converts step-1's local percent sliders into per-underlying deposit amounts against the entered collateral total. */
-function depositsFromWeightPercents(
-  weightPercents: Record<UnderlyingId, number>,
-  totalUsd: number,
-): Record<UnderlyingId, number> {
-  const out: Record<UnderlyingId, number> = {}
-  for (const id of UNDERLYING_ORDER) out[id] = ((weightPercents[id] ?? 0) / 100) * totalUsd
-  return out
+interface StockMeta {
+  maxLtvPct: number
+  providerCount: number
 }
 
-interface BorrowCardState {
-  checked: boolean
+const STOCK_META: Record<UnderlyingId, StockMeta> = Object.fromEntries(
+  UNDERLYING_ORDER.map(id => {
+    const underlying = HERO_UNDERLYINGS[id]
+    const splits = PROVIDER_SPLITS[id] ?? []
+    const { maxLtv } = ltvParamsFor(underlying.tier, bestProviderScore(id))
+    return [id, { maxLtvPct: Math.round(maxLtv * 100), providerCount: splits.length }]
+  }),
+)
+
+interface DepositRowState {
+  selected: boolean
   amountUsd: number
+  input: string
 }
 
-function initialBorrowState(config?: IntentConfig): Record<Stablecoin, BorrowCardState> {
-  const borrows = config?.borrows ?? [{ stablecoin: 'USDC' as Stablecoin, amountUsd: 3_000_000 }]
-  const byCoin = new Map(borrows.map(b => [b.stablecoin, b.amountUsd]))
-  const out = {} as Record<Stablecoin, BorrowCardState>
-  for (const coin of STABLECOIN_ORDER) {
-    const amount = byCoin.get(coin)
-    out[coin] = {
-      checked: Boolean(amount && amount > 0),
-      amountUsd: amount && amount > 0 ? amount : FRESH_BORROW_DEFAULTS[coin],
-    }
+function initialDepositState(config?: IntentConfig): Record<UnderlyingId, DepositRowState> {
+  const out = {} as Record<UnderlyingId, DepositRowState>
+  for (const id of UNDERLYING_ORDER) {
+    const amount = config?.deposits[id] ?? 0
+    out[id] = { selected: amount > 0, amountUsd: amount, input: amount > 0 ? formatUsd(amount) : '' }
   }
   return out
 }
 
-/**
- * Proportionally rescales weights to sum to 100, rounding each to an integer
- * and dumping any leftover rounding remainder onto the currently-largest weight.
- */
-function normalizeWeights(weights: Record<UnderlyingId, number>): Record<UnderlyingId, number> {
-  const total = UNDERLYING_ORDER.reduce((acc, id) => acc + (weights[id] ?? 0), 0)
-  if (total === 0) return weights
-
-  const rounded: Record<UnderlyingId, number> = {}
-  for (const id of UNDERLYING_ORDER) rounded[id] = Math.round(((weights[id] ?? 0) / total) * 100)
-
-  const sum = UNDERLYING_ORDER.reduce((acc, id) => acc + rounded[id], 0)
-  const remainder = 100 - sum
-  const largestId = UNDERLYING_ORDER.reduce((a, b) => (rounded[b] > rounded[a] ? b : a))
-  rounded[largestId] += remainder
-  return rounded
+function borrowAmount(config: IntentConfig | undefined, coin: Stablecoin): number {
+  return config?.borrows.find(b => b.stablecoin === coin)?.amountUsd ?? 0
 }
 
-interface HfMeterProps {
-  hf: number
-  interventionHf: number
-  compact?: boolean
-}
-
-function HfMeter({ hf, interventionHf, compact }: HfMeterProps) {
-  const finite = Number.isFinite(hf)
-  const clamped = finite ? Math.min(HF_METER_MAX, Math.max(HF_METER_MIN, hf)) : HF_METER_MAX
-  const thumbPct = ((clamped - HF_METER_MIN) / (HF_METER_MAX - HF_METER_MIN)) * 100
-  const colorClass = !finite || hf >= interventionHf ? 'is-good' : hf >= 1 ? 'is-warn' : 'is-bad'
-
+/** Execution-steps strip — numbered 1 → 2 → ✓ with connector lines, shown on all three screens. */
+function ExecSteps({ current }: { current: 1 | 2 | 3 }) {
   return (
-    <div
-      className={`advisor-hf-meter${compact ? ' is-compact' : ''}`}
-      data-testid={compact ? 'hf-meter-reprise' : 'hf-meter'}
-    >
-      <div className={`advisor-hf-meter-value ${colorClass}`} data-testid="projected-hf-value">
-        {finite ? hf.toFixed(2) : '∞'}
-      </div>
-      <div
-        className="advisor-hf-meter-track"
-        role="meter"
-        aria-valuemin={HF_METER_MIN}
-        aria-valuemax={HF_METER_MAX}
-        aria-valuenow={finite ? hf : HF_METER_MAX}
-        aria-label="Projected health factor"
-      >
-        <span className="advisor-hf-meter-thumb" style={{ left: `${thumbPct}%` }} />
-        {!compact &&
-          HF_TICKS.map(tick => (
-            <span key={tick.value} className="advisor-hf-meter-tick" style={{ left: `${hfTickPct(tick.value)}%` }} />
-          ))}
-      </div>
-      {!compact && (
-        <div className="advisor-hf-meter-ticks">
-          {HF_TICKS.map((tick, index) => (
-            <span
-              key={tick.value}
-              className={`advisor-hf-meter-tick-label${index % 2 === 1 ? ' advisor-hf-meter-tick-label--row1' : ''}`}
-              style={{ left: `${hfTickPct(tick.value)}%` }}
-            >
-              {tick.label}
+    <div className="advisor-exec-steps" aria-label="Execution steps">
+      {STEP_LABELS.map((label, index) => {
+        const stepNumber = index + 1
+        const state: 'done' | 'active' | 'upcoming' =
+          stepNumber < current ? 'done' : stepNumber === current ? 'active' : 'upcoming'
+        return (
+          <div className="advisor-exec-node-wrap" key={label}>
+            {index > 0 && <span className={`advisor-exec-connector${stepNumber <= current ? ' is-done' : ''}`} aria-hidden="true" />}
+            <div className={`advisor-exec-node advisor-exec-node--${state}`}>
+              <span className="advisor-exec-node-circle">{state === 'done' ? '✓' : stepNumber}</span>
+              <span className="advisor-exec-node-label">{label}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+interface StockRowProps {
+  id: UnderlyingId
+  state: DepositRowState
+  onToggle: (selected: boolean) => void
+  onAmountChange: (raw: string) => void
+  onAmountBlur: () => void
+  onPreset: (amount: number) => void
+}
+
+function StockRow({ id, state, onToggle, onAmountChange, onAmountBlur, onPreset }: StockRowProps) {
+  const underlying = HERO_UNDERLYINGS[id]
+  const meta = STOCK_META[id]
+  return (
+    <div className={`advisor-stock-row${state.selected ? ' is-selected' : ''}`}>
+      <label className="advisor-stock-row-main">
+        <input
+          type="checkbox"
+          className="advisor-visually-hidden"
+          checked={state.selected}
+          aria-label={`Select ${underlying.symbol}`}
+          onChange={e => onToggle(e.target.checked)}
+        />
+        <span className="advisor-stock-check" aria-hidden="true" />
+        <span className="advisor-stock-id">
+          <strong>{underlying.symbol}</strong>
+          <span className="advisor-stock-name">{underlying.name}</span>
+        </span>
+        <span className="advisor-tier-chip">{TIER_CHIP_LABEL[underlying.tier]}</span>
+        <span className="advisor-stock-meta">Max LTV {meta.maxLtvPct}%</span>
+        <span className="advisor-stock-meta">
+          {meta.providerCount} provider{meta.providerCount === 1 ? '' : 's'}
+        </span>
+      </label>
+      {state.selected && (
+        <div className="advisor-deposit-block">
+          <label className="advisor-deposit-field">
+            <span className="advisor-deposit-label" aria-hidden="true">
+              Deposit amount
             </span>
-          ))}
+            <input
+              className="advisor-deposit-input"
+              inputMode="numeric"
+              aria-label={`${underlying.symbol} deposit amount`}
+              placeholder="$0"
+              value={state.input}
+              onChange={e => onAmountChange(e.target.value)}
+              onBlur={onAmountBlur}
+            />
+          </label>
+          <div className="advisor-deposit-presets">
+            {DEPOSIT_PRESETS.map(amount => (
+              <button key={amount} type="button" className="advisor-deposit-preset" onClick={() => onPreset(amount)}>
+                {formatCompactUsd(amount)}
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function StepRail({ current }: { current: number }) {
-  return (
-    <ol className="advisor-step-rail">
-      {STEP_LABELS.map((label, index) => {
-        const stepNumber = index + 1
-        const state = stepNumber < current ? 'done' : stepNumber === current ? 'current' : 'future'
-        return (
-          <li key={label} className={`advisor-step-dot advisor-step-dot--${state}`}>
-            <span className="advisor-step-dot-marker">{state === 'done' ? '✓' : stepNumber}</span>
-            <span className="advisor-step-dot-label">{label}</span>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
-
-interface WizardFooterProps {
-  step: number
+interface Screen1Props {
+  deposits: Record<UnderlyingId, DepositRowState>
+  onToggleStock: (id: UnderlyingId, selected: boolean) => void
+  onDepositChange: (id: UnderlyingId, raw: string) => void
+  onDepositBlur: (id: UnderlyingId) => void
+  onDepositPreset: (id: UnderlyingId, amount: number) => void
+  selectedIds: UnderlyingId[]
+  totalDeposits: number
+  usdcInput: string
+  onUsdcChange: (raw: string) => void
+  onUsdcBlur: () => void
+  presetAmounts: { id: string; label: string; amount: number }[]
+  onApplyUsdcPreset: (amount: number) => void
+  usdtEnabled: boolean
+  onToggleUsdt: (enabled: boolean) => void
+  usdtInput: string
+  onUsdtChange: (raw: string) => void
+  onUsdtBlur: () => void
+  usdtMax: number
+  usdeEnabled: boolean
+  onToggleUsde: (enabled: boolean) => void
+  usdeInput: string
+  onUsdeChange: (raw: string) => void
+  onUsdeBlur: () => void
+  usdeMax: number
+  projectedHf: number
+  capacity: number
+  totalBorrowUsd: number
+  errors: IntentValidationError[]
   canContinue: boolean
   reason?: string
-  onBack: () => void
   onContinue: () => void
-  continueLabel: string
-  continueTestId?: string
-}
-
-function WizardFooter({ step, canContinue, reason, onBack, onContinue, continueLabel, continueTestId }: WizardFooterProps) {
-  return (
-    <div className="advisor-wizard-footer">
-      {step > 1 ? (
-        <button type="button" className="advisor-btn advisor-btn--ghost" onClick={onBack}>
-          Back
-        </button>
-      ) : (
-        <div className="advisor-wizard-footer-spacer" />
-      )}
-      <div className="advisor-wizard-footer-continue">
-        {reason && <span className="advisor-wizard-reason">{reason}</span>}
-        <button type="button" className="advisor-btn" disabled={!canContinue} data-testid={continueTestId} onClick={onContinue}>
-          {continueLabel}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-interface Step1Props {
-  weightPercents: Record<UnderlyingId, number>
-  weightTotal: number
-  collateralInput: string
-  onCollateralChange: (value: string) => void
-  onCollateralBlur: () => void
-  onWeightChange: (id: UnderlyingId, value: number) => void
-  onNormalize: () => void
   onSkipDemo: () => void
   appliedChangesNotice: number
 }
 
-function Step1Portfolio({
-  weightPercents,
-  weightTotal,
-  collateralInput,
-  onCollateralChange,
-  onCollateralBlur,
-  onWeightChange,
-  onNormalize,
-  onSkipDemo,
-  appliedChangesNotice,
-}: Step1Props) {
-  return (
-    <>
-      <h2>Define your portfolio</h2>
-      <p className="advisor-explainer">Set target exposure by asset. Your agent selects providers and routes execution.</p>
-
-      {appliedChangesNotice > 0 && (
-        <p className="advisor-notice" data-testid="reconfigure-notice">
-          Your agent has applied {appliedChangesNotice} approved changes since activation; reconfiguring restarts from
-          your last confirmed mandate.
-        </p>
-      )}
-
-      <label className="advisor-field">
-        <span className="advisor-overline">Collateral to deposit</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={collateralInput}
-          onChange={e => onCollateralChange(e.target.value)}
-          onBlur={onCollateralBlur}
-        />
-      </label>
-
-      <div className="advisor-composition-bar">
-        {UNDERLYING_ORDER.map(id => (
-          <span
-            key={id}
-            className="advisor-composition-segment"
-            style={{ width: `${weightPercents[id] ?? 0}%`, background: SERIES_COLOR[id] }}
-          />
-        ))}
-      </div>
-
-      <div className="advisor-asset-rows">
-        {UNDERLYING_ORDER.map(id => {
-          const underlying = HERO_UNDERLYINGS[id]
-          return (
-            <div className="advisor-asset-row" key={id}>
-              <span className="advisor-asset-dot" style={{ background: SERIES_COLOR[id] }} />
-              <span className="advisor-asset-name">
-                <strong>{underlying.symbol}</strong> {underlying.name}
-              </span>
-              <span className="advisor-tier-chip">
-                {TIER_LABEL[underlying.tier]}
-                {underlying.tier === 'private_equity' && <span className="advisor-tier-badge">Manual approval only</span>}
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={weightPercents[id] ?? 0}
-                aria-label={`${underlying.symbol} weight slider`}
-                onChange={e => onWeightChange(id, Number(e.target.value))}
-              />
-              <label className="advisor-weight-input">
-                {underlying.symbol} target weight
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={weightPercents[id] ?? 0}
-                  onChange={e => onWeightChange(id, Number(e.target.value))}
-                />
-              </label>
-              <span>%</span>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="advisor-total-row">
-        <span className={weightTotal === 100 ? 'advisor-total-ok' : 'advisor-total-bad'}>Total: {weightTotal}%</span>
-        {weightTotal !== 100 && (
-          <button type="button" className="advisor-btn advisor-btn--ghost" onClick={onNormalize}>
-            Normalize
-          </button>
-        )}
-      </div>
-
-      <p className="advisor-skip-link">
-        <button type="button" data-testid="skip-demo" className="advisor-link-button" onClick={onSkipDemo}>
-          Skip — load demo portfolio →
-        </button>
-      </p>
-    </>
-  )
-}
-
-interface Step2Props {
-  hf: number
-  interventionHf: number
-  capacity: number
-  totalBorrowUsd: number
-  borrowState: Record<Stablecoin, BorrowCardState>
-  amountInputs: Record<Stablecoin, string>
-  onToggleCoin: (coin: Stablecoin, checked: boolean) => void
-  onAmountChange: (coin: Stablecoin, raw: string) => void
-  onAmountFocus: (coin: Stablecoin) => void
-  onAmountBlur: (coin: Stablecoin) => void
-  errors: IntentValidationError[]
-}
-
-function Step2Borrow({
-  hf,
-  interventionHf,
+function Screen1({
+  deposits,
+  onToggleStock,
+  onDepositChange,
+  onDepositBlur,
+  onDepositPreset,
+  selectedIds,
+  totalDeposits,
+  usdcInput,
+  onUsdcChange,
+  onUsdcBlur,
+  presetAmounts,
+  onApplyUsdcPreset,
+  usdtEnabled,
+  onToggleUsdt,
+  usdtInput,
+  onUsdtChange,
+  onUsdtBlur,
+  usdtMax,
+  usdeEnabled,
+  onToggleUsde,
+  usdeInput,
+  onUsdeChange,
+  onUsdeBlur,
+  usdeMax,
+  projectedHf,
   capacity,
   totalBorrowUsd,
-  borrowState,
-  amountInputs,
-  onToggleCoin,
-  onAmountChange,
-  onAmountFocus,
-  onAmountBlur,
   errors,
-}: Step2Props) {
-  const capacityPct = capacity === 0 ? 0 : Math.min(100, (totalBorrowUsd / capacity) * 100)
-  const capacityClass = capacityPct > 90 ? 'is-bad' : capacityPct > 70 ? 'is-warn' : 'is-brand'
+  canContinue,
+  reason,
+  onContinue,
+  onSkipDemo,
+  appliedChangesNotice,
+}: Screen1Props) {
+  const status = hfStatus(Number.isFinite(projectedHf) ? projectedHf : Infinity)
+  const zoneBad = status !== 'healthy'
+  const zoneNote =
+    status === 'healthy'
+      ? "Healthy — above your agent's intervention threshold"
+      : status === 'warning'
+        ? 'Inside the intervention zone'
+        : 'Below liquidation'
 
   return (
     <>
-      <h2>Set your borrow</h2>
-      <p className="advisor-explainer">Borrow stablecoins against your basket. Risk updates as you type.</p>
-
-      <HfMeter hf={hf} interventionHf={interventionHf} />
-
-      <div className="advisor-capacity-row">
-        <span>
-          Borrowing {formatUsd(totalBorrowUsd)} of {formatUsd(capacity)} origination limit
-        </span>
-        <div className="advisor-capacity-track">
-          <span className={`advisor-capacity-fill ${capacityClass}`} style={{ width: `${capacityPct}%` }} />
-        </div>
-        <p className="advisor-capacity-note">
-          Borrowing to your full origination limit places you inside the agent&apos;s intervention zone.
+      <section className="advisor-pane-content">
+        <h2>Build your position</h2>
+        <p className="advisor-explainer">
+          Pick tokenized stocks, set deposits, and choose how much to borrow. Your agent handles providers and routing.
         </p>
-      </div>
 
-      <div className="advisor-stable-cards">
-        {STABLECOIN_ORDER.map(coin => {
-          const card = borrowState[coin]
-          return (
-            <div className="advisor-stable-card-wrap" key={coin}>
-              <label className="advisor-stable-card" data-testid={`stable-card-${coin}`}>
-                <input
-                  type="checkbox"
-                  className="advisor-visually-hidden"
-                  checked={card.checked}
-                  onChange={e => onToggleCoin(coin, e.target.checked)}
-                />
-                <span className="advisor-stable-name">{coin}</span>
-                <span className="advisor-tier-chip">{STABLECOIN_TIER_LABEL[coin]}</span>
-                <span className="advisor-stable-apr">{(HERO_BORROW_APR[coin] * 100).toFixed(1)}% APR</span>
-                <span className="advisor-stable-cap">{STABLECOIN_CAP_NOTE[coin]}</span>
-                {coin === 'USDe' && <span className="advisor-peg-badge">Peg ${HERO_USDE_PRICE.toFixed(3)}</span>}
-              </label>
-              {card.checked && (
-                <label className="advisor-amount-field">
-                  {coin} amount
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={amountInputs[coin]}
-                    onChange={e => onAmountChange(coin, e.target.value)}
-                    onFocus={() => onAmountFocus(coin)}
-                    onBlur={() => onAmountBlur(coin)}
-                  />
-                </label>
-              )}
-            </div>
-          )
-        })}
-      </div>
+        {appliedChangesNotice > 0 && (
+          <p className="advisor-notice" data-testid="reconfigure-notice">
+            Your agent has applied {appliedChangesNotice} approved changes since activation; reconfiguring restarts
+            from your last confirmed mandate.
+          </p>
+        )}
 
-      {errors.length > 0 && (
-        <ul className="advisor-error-list">
-          {errors.map(error => (
-            <li key={error.code}>{error.message}</li>
+        <div className="advisor-catalog">
+          {UNDERLYING_ORDER.map(id => (
+            <StockRow
+              key={id}
+              id={id}
+              state={deposits[id]}
+              onToggle={selected => onToggleStock(id, selected)}
+              onAmountChange={raw => onDepositChange(id, raw)}
+              onAmountBlur={() => onDepositBlur(id)}
+              onPreset={amount => onDepositPreset(id, amount)}
+            />
           ))}
-        </ul>
-      )}
+        </div>
+
+        <p className="advisor-route-strip">
+          You deposit: {selectedIds.length > 0 ? selectedIds.map(id => HERO_UNDERLYINGS[id].symbol).join(', ') : '—'} ·
+          Agent: 0x.credit routing · Protocol: Gearbox
+        </p>
+
+        <p className="advisor-skip-link">
+          <button type="button" data-testid="skip-demo" className="advisor-link-button" onClick={onSkipDemo}>
+            Skip — load demo portfolio →
+          </button>
+        </p>
+      </section>
+
+      <aside className="advisor-pane-rail">
+        <h3 className="advisor-overline">Your position</h3>
+        <dl className="advisor-position-summary">
+          <div className="advisor-position-line advisor-position-line--total">
+            <dt>Collateral</dt>
+            <dd>{formatUsd(totalDeposits)}</dd>
+          </div>
+          {selectedIds.map(id => (
+            <div className="advisor-position-line" key={id}>
+              <dt>{HERO_UNDERLYINGS[id].symbol}</dt>
+              <dd>{formatUsd(deposits[id].amountUsd)}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <h3 className="advisor-overline">Borrow</h3>
+        <div className="advisor-borrow-anchor">
+          <label className="advisor-deposit-field">
+            <span className="advisor-deposit-label" aria-hidden="true">
+              Borrow amount
+            </span>
+            <input
+              className="advisor-deposit-input"
+              inputMode="numeric"
+              aria-label="USDC borrow amount"
+              placeholder="$0"
+              value={usdcInput}
+              onChange={e => onUsdcChange(e.target.value)}
+              onBlur={onUsdcBlur}
+            />
+          </label>
+          <div className="advisor-risk-presets">
+            {presetAmounts.map(preset => (
+              <button
+                key={preset.id}
+                type="button"
+                className="advisor-preset-pill"
+                disabled={preset.amount <= 0}
+                onClick={() => onApplyUsdcPreset(preset.amount)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="advisor-borrow-toggle-row">
+          <input
+            type="checkbox"
+            className="advisor-visually-hidden"
+            checked={usdtEnabled}
+            onChange={e => onToggleUsdt(e.target.checked)}
+          />
+          <span className="advisor-borrow-toggle-mark" aria-hidden="true" />
+          <span>+ USDT</span>
+        </label>
+        {usdtEnabled && (
+          <div className="advisor-borrow-extra">
+            <label className="advisor-deposit-field">
+              <span className="advisor-deposit-label" aria-hidden="true">
+                Borrow amount
+              </span>
+              <input
+                className="advisor-deposit-input"
+                inputMode="numeric"
+                aria-label="USDT borrow amount"
+                placeholder="$0"
+                value={usdtInput}
+                onChange={e => onUsdtChange(e.target.value)}
+                onBlur={onUsdtBlur}
+              />
+            </label>
+            <p className="advisor-max-hint">up to {formatUsd(Math.max(0, usdtMax))}</p>
+          </div>
+        )}
+
+        <label className="advisor-borrow-toggle-row">
+          <input
+            type="checkbox"
+            className="advisor-visually-hidden"
+            checked={usdeEnabled}
+            onChange={e => onToggleUsde(e.target.checked)}
+          />
+          <span className="advisor-borrow-toggle-mark" aria-hidden="true" />
+          <span>+ USDe</span>
+          <span className="advisor-peg-badge">Peg ${HERO_USDE_PRICE.toFixed(3)}</span>
+        </label>
+        {usdeEnabled && (
+          <div className="advisor-borrow-extra">
+            <label className="advisor-deposit-field">
+              <span className="advisor-deposit-label" aria-hidden="true">
+                Borrow amount
+              </span>
+              <input
+                className="advisor-deposit-input"
+                inputMode="numeric"
+                aria-label="USDe borrow amount"
+                placeholder="$0"
+                value={usdeInput}
+                onChange={e => onUsdeChange(e.target.value)}
+                onBlur={onUsdeBlur}
+              />
+            </label>
+            <p className="advisor-max-hint">up to {formatUsd(Math.max(0, usdeMax))}</p>
+          </div>
+        )}
+
+        <div className="advisor-risk-readout">
+          <span className="advisor-overline">Projected health factor</span>
+          <div className="advisor-hf-readout-value" data-testid="screen1-hf-value">
+            {Number.isFinite(projectedHf) ? projectedHf.toFixed(2) : '∞'}
+          </div>
+          <p className={`advisor-zone-note${zoneBad ? ' is-bad' : ''}`}>{zoneNote}</p>
+          <p className="advisor-capacity-line">
+            Borrowing {formatUsd(totalBorrowUsd)} of {formatUsd(capacity)} origination limit
+          </p>
+          {errors.length > 0 && (
+            <ul className="advisor-error-list">
+              {errors.map(error => (
+                <li key={error.code}>{error.message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <ExecSteps current={1} />
+
+        <button type="button" className="advisor-cta" disabled={!canContinue} onClick={onContinue}>
+          Continue to mandate
+        </button>
+        {!canContinue && reason && <p className="advisor-cta-reason">{reason}</p>}
+      </aside>
     </>
   )
 }
 
-interface Step3Props {
+interface Screen2Props {
   mode: IntentConfig['mode']
   onModeChange: (mode: IntentConfig['mode']) => void
   permissions: Record<string, boolean>
   onPermissionChange: (key: string, value: boolean) => void
   interventionHf: number
   onInterventionChange: (value: number) => void
+  totalDeposits: number
+  totalBorrowUsd: number
+  projectedHf: number
+  onBack: () => void
+  onContinue: () => void
 }
 
-function Step3Mandate({ mode, onModeChange, permissions, onPermissionChange, interventionHf, onInterventionChange }: Step3Props) {
+function Screen2({
+  mode,
+  onModeChange,
+  permissions,
+  onPermissionChange,
+  interventionHf,
+  onInterventionChange,
+  totalDeposits,
+  totalBorrowUsd,
+  projectedHf,
+  onBack,
+  onContinue,
+}: Screen2Props) {
   return (
     <>
-      <h2>Grant your mandate</h2>
-      <p className="advisor-explainer">
-        Choose how much autonomy your agent has. You can change this anytime; changes take a 10-minute timelock.
-      </p>
+      <section className="advisor-pane-content">
+        <h2>Grant your mandate</h2>
+        <p className="advisor-explainer">
+          Choose how much autonomy your agent has. You can change this anytime; changes take a 10-minute timelock.
+        </p>
 
-      <div className="advisor-mode-cards">
-        {(['manual', 'semi', 'auto'] as const).map(m => (
-          <label key={m} className={`advisor-mode-card${mode === m ? ' is-selected' : ''}`} data-testid={`mode-${m}`}>
-            <input
-              type="radio"
-              className="advisor-visually-hidden"
-              name="advisor-mandate-mode"
-              checked={mode === m}
-              onChange={() => onModeChange(m)}
-            />
-            <span className="advisor-mode-title">
-              {MODE_COPY[m].title}
-              {m === 'semi' && <span className="advisor-recommended-pill">Recommended</span>}
-            </span>
-            <span className="advisor-mode-desc">{MODE_COPY[m].description}</span>
-          </label>
-        ))}
-      </div>
+        <div className="advisor-mode-cards">
+          {(['manual', 'semi', 'auto'] as const).map(m => (
+            <label key={m} className={`advisor-mode-card${mode === m ? ' is-selected' : ''}`} data-testid={`mode-${m}`}>
+              <input
+                type="radio"
+                className="advisor-visually-hidden"
+                name="advisor-mandate-mode"
+                checked={mode === m}
+                onChange={() => onModeChange(m)}
+              />
+              <span className="advisor-mode-title">
+                {MODE_COPY[m].title}
+                {m === 'semi' && <span className="advisor-recommended-pill">Recommended</span>}
+              </span>
+              <span className="advisor-mode-desc">{MODE_COPY[m].description}</span>
+            </label>
+          ))}
+        </div>
 
-      <p className="advisor-overline">Permissions</p>
-      <div className="advisor-permission-rows">
-        {PERMISSION_ROWS.map(row => (
-          <label key={row.key} className="advisor-permission-row">
-            <input
-              type="checkbox"
-              className="advisor-visually-hidden"
-              checked={Boolean(permissions[row.key])}
-              onChange={e => onPermissionChange(row.key, e.target.checked)}
-            />
-            <span className="advisor-switch" aria-hidden="true" />
-            <span>
-              <span className="advisor-permission-label">{row.label}</span>
-              <span className="advisor-permission-desc">{row.description}</span>
-            </span>
-          </label>
-        ))}
-      </div>
+        <p className="advisor-overline">Permissions</p>
+        <div className="advisor-permission-rows">
+          {PERMISSION_ROWS.map(row => (
+            <label key={row.key} className="advisor-permission-row">
+              <input
+                type="checkbox"
+                className="advisor-visually-hidden"
+                checked={Boolean(permissions[row.key])}
+                onChange={e => onPermissionChange(row.key, e.target.checked)}
+              />
+              <span className="advisor-switch" aria-hidden="true" />
+              <span>
+                <span className="advisor-permission-label">{row.label}</span>
+                <span className="advisor-permission-desc">{row.description}</span>
+              </span>
+            </label>
+          ))}
+        </div>
 
-      <label className="advisor-field">
-        <span className="advisor-overline">Intervention threshold</span>
-        <input
-          type="range"
-          min={1.05}
-          max={1.5}
-          step={0.01}
-          value={interventionHf}
-          onChange={e => onInterventionChange(Number(e.target.value))}
-        />
-        <span className="advisor-intervention-value">{interventionHf.toFixed(2)}</span>
-      </label>
-      <p className="advisor-hint">Your agent begins acting when projected health drops below this.</p>
+        <label className="advisor-field">
+          <span className="advisor-overline">Intervention threshold</span>
+          <input
+            type="range"
+            min={1.05}
+            max={1.5}
+            step={0.01}
+            value={interventionHf}
+            onChange={e => onInterventionChange(Number(e.target.value))}
+          />
+          <span className="advisor-intervention-value">{interventionHf.toFixed(2)}</span>
+        </label>
+        <p className="advisor-hint">Your agent begins acting when projected health drops below this.</p>
+      </section>
+
+      <aside className="advisor-pane-rail">
+        <h3 className="advisor-overline">Your position</h3>
+        <dl className="advisor-position-summary">
+          <div className="advisor-position-line advisor-position-line--total">
+            <dt>Collateral</dt>
+            <dd>{formatUsd(totalDeposits)}</dd>
+          </div>
+          <div className="advisor-position-line">
+            <dt>Borrow</dt>
+            <dd>{formatUsd(totalBorrowUsd)}</dd>
+          </div>
+          <div className="advisor-position-line">
+            <dt>Projected HF</dt>
+            <dd>{Number.isFinite(projectedHf) ? projectedHf.toFixed(2) : '∞'}</dd>
+          </div>
+        </dl>
+
+        <ExecSteps current={2} />
+
+        <button type="button" className="advisor-btn advisor-btn--ghost advisor-back-btn" onClick={onBack}>
+          Back
+        </button>
+        <button type="button" className="advisor-cta" onClick={onContinue}>
+          Continue to review
+        </button>
+      </aside>
     </>
   )
 }
 
-interface Step4Props {
-  weightPercents: Record<UnderlyingId, number>
+interface Screen3Props {
+  selectedIds: UnderlyingId[]
+  deposits: Record<UnderlyingId, DepositRowState>
   borrows: IntentBorrow[]
   mode: IntentConfig['mode']
   permissions: Record<string, boolean>
@@ -562,10 +610,13 @@ interface Step4Props {
   capacity: number
   totalBorrowUsd: number
   assessment: Assessment
+  onBack: () => void
+  onActivate: () => void
 }
 
-function Step4Review({
-  weightPercents,
+function Screen3({
+  selectedIds,
+  deposits,
   borrows,
   mode,
   permissions,
@@ -574,90 +625,122 @@ function Step4Review({
   capacity,
   totalBorrowUsd,
   assessment,
-}: Step4Props) {
+  onBack,
+  onActivate,
+}: Screen3Props) {
   const blendedApr =
-    totalBorrowUsd === 0 ? 0 : borrows.reduce((acc, b) => acc + b.amountUsd * HERO_BORROW_APR[b.stablecoin], 0) / totalBorrowUsd
+    totalBorrowUsd === 0
+      ? 0
+      : borrows.reduce((acc, b) => acc + b.amountUsd * HERO_BORROW_APR[b.stablecoin], 0) / totalBorrowUsd
   const enabledPermissions = Object.values(permissions).filter(Boolean).length
   const headroom = Math.max(0, capacity - totalBorrowUsd)
   const topProposal = assessment.proposals[0]
 
   return (
     <>
-      <h2>Review &amp; activate</h2>
+      <section className="advisor-pane-content">
+        <h2>Review &amp; activate</h2>
 
-      <div className="advisor-review-grid">
-        <div className="advisor-review-column">
-          <p className="advisor-overline">Portfolio</p>
-          {UNDERLYING_ORDER.map(id => (
-            <div key={id} className="advisor-review-row">
-              <span className="advisor-asset-dot" style={{ background: SERIES_COLOR[id] }} />
-              <span>{HERO_UNDERLYINGS[id].symbol}</span>
-              <span>{weightPercents[id] ?? 0}%</span>
+        <div className="advisor-review-list">
+          <div className="advisor-review-group">
+            <p className="advisor-overline">Deposits</p>
+            {selectedIds.map(id => (
+              <div className="advisor-review-row" key={id}>
+                <dt>{HERO_UNDERLYINGS[id].symbol}</dt>
+                <dd>{formatUsd(deposits[id].amountUsd)}</dd>
+              </div>
+            ))}
+          </div>
+          <div className="advisor-review-group">
+            <p className="advisor-overline">Borrow</p>
+            {borrows.map(b => (
+              <div className="advisor-review-row" key={b.stablecoin}>
+                <dt>{b.stablecoin}</dt>
+                <dd>
+                  {formatUsd(b.amountUsd)} · {(HERO_BORROW_APR[b.stablecoin] * 100).toFixed(1)}% APR
+                </dd>
+              </div>
+            ))}
+            <div className="advisor-review-row">
+              <dt>Blended APR</dt>
+              <dd>{totalBorrowUsd === 0 ? '—' : `${(blendedApr * 100).toFixed(1)}%`}</dd>
             </div>
-          ))}
-        </div>
-        <div className="advisor-review-column">
-          <p className="advisor-overline">Borrow</p>
-          {borrows.map(b => (
-            <div key={b.stablecoin} className="advisor-review-row">
-              <span>{b.stablecoin}</span>
-              <span>{formatUsd(b.amountUsd)}</span>
+          </div>
+          <div className="advisor-review-group">
+            <p className="advisor-overline">Risk</p>
+            <div className="advisor-review-row">
+              <dt>Projected HF</dt>
+              <dd>{Number.isFinite(projectedHf) ? projectedHf.toFixed(2) : '∞'}</dd>
             </div>
-          ))}
-          <div className="advisor-review-row">
-            <span>Blended APR</span>
-            <span>{totalBorrowUsd === 0 ? '—' : `${(blendedApr * 100).toFixed(1)}%`}</span>
+            <div className="advisor-review-row">
+              <dt>Headroom to origination limit</dt>
+              <dd>{formatUsd(headroom)}</dd>
+            </div>
+          </div>
+          <div className="advisor-review-group">
+            <p className="advisor-overline">Mandate</p>
+            <div className="advisor-review-row">
+              <dt>Mode</dt>
+              <dd>{MODE_COPY[mode].title}</dd>
+            </div>
+            <div className="advisor-review-row">
+              <dt>Permissions</dt>
+              <dd>{enabledPermissions} enabled</dd>
+            </div>
+            <div className="advisor-review-row">
+              <dt>Threshold</dt>
+              <dd>{interventionHf.toFixed(2)}</dd>
+            </div>
           </div>
         </div>
-        <div className="advisor-review-column">
-          <p className="advisor-overline">Mandate</p>
-          <p>{MODE_COPY[mode].title}</p>
-          <p>{enabledPermissions} permissions enabled</p>
-          <p>Threshold {interventionHf.toFixed(2)}</p>
-        </div>
-        <div className="advisor-review-column">
-          <p className="advisor-overline">Risk</p>
-          <HfMeter hf={projectedHf} interventionHf={interventionHf} compact />
-          <p>Headroom to origination limit {formatUsd(headroom)}</p>
-        </div>
-      </div>
 
-      <div className="advisor-agent-preview" data-testid="agent-preview">
-        <p className="advisor-overline">Your agent is already watching</p>
-        {topProposal ? (
-          <>
-            <div className="advisor-preview-card">
-              <span className="advisor-pulse-dot" aria-hidden="true" />
-              <p className="advisor-preview-rationale">{topProposal.rationale}</p>
-              {topProposal.contributingSignals.length > 0 && (
-                <p className="advisor-preview-signals">
-                  {topProposal.contributingSignals
-                    .map(id => HERO_SIGNALS.find(s => s.feedId === id)?.sourceLabel ?? id)
-                    .join(', ')}
-                </p>
-              )}
-              {Number.isFinite(topProposal.projectedHfDelta) && (
-                <span className={`advisor-hf-delta-pill${topProposal.projectedHfDelta >= 0 ? ' is-up' : ' is-down'}`}>
-                  {topProposal.projectedHfDelta >= 0 ? '+' : ''}
-                  {topProposal.projectedHfDelta.toFixed(3)} HF
-                </span>
-              )}
-            </div>
-            <p className="advisor-preview-caption">
-              This proposal will be waiting for you after activation. Nothing executes without your approval.
-            </p>
-          </>
-        ) : (
-          <p className="advisor-preview-empty">No risks detected right now — your agent monitors continuously.</p>
-        )}
+        <div className="advisor-agent-preview" data-testid="agent-preview">
+          <p className="advisor-overline">Your agent is already watching</p>
+          {topProposal ? (
+            <>
+              <div className="advisor-preview-card">
+                <span className="advisor-pulse-dot" aria-hidden="true" />
+                <p className="advisor-preview-rationale">{topProposal.rationale}</p>
+                {topProposal.contributingSignals.length > 0 && (
+                  <p className="advisor-preview-signals">
+                    {topProposal.contributingSignals
+                      .map(id => HERO_SIGNALS.find(s => s.feedId === id)?.sourceLabel ?? id)
+                      .join(', ')}
+                  </p>
+                )}
+                {Number.isFinite(topProposal.projectedHfDelta) && (
+                  <span className={`advisor-hf-delta-pill${topProposal.projectedHfDelta >= 0 ? ' is-up' : ' is-down'}`}>
+                    {topProposal.projectedHfDelta >= 0 ? '+' : ''}
+                    {topProposal.projectedHfDelta.toFixed(3)} HF
+                  </span>
+                )}
+              </div>
+              <p className="advisor-preview-caption">
+                This proposal will be waiting for you after activation. Nothing executes without your approval.
+              </p>
+            </>
+          ) : (
+            <p className="advisor-preview-empty">No risks detected right now — your agent monitors continuously.</p>
+          )}
 
-        <p className="advisor-overline">What your agent watches</p>
-        <ul className="advisor-watch-list">
-          <li>External signals · {HERO_SIGNALS.map(s => s.sourceLabel).join(', ')}</li>
-          <li>Health factor · intervenes below {interventionHf.toFixed(2)}</li>
-          <li>Basket drift · rebalance beyond ±5%</li>
-        </ul>
-      </div>
+          <p className="advisor-overline">What your agent watches</p>
+          <ul className="advisor-watch-list">
+            <li>External signals · {HERO_SIGNALS.map(s => s.sourceLabel).join(', ')}</li>
+            <li>Health factor · intervenes below {interventionHf.toFixed(2)}</li>
+            <li>Basket drift · rebalance beyond ±5%</li>
+          </ul>
+        </div>
+      </section>
+
+      <aside className="advisor-pane-rail">
+        <ExecSteps current={3} />
+        <button type="button" className="advisor-btn advisor-btn--ghost advisor-back-btn" onClick={onBack}>
+          Back
+        </button>
+        <button type="button" className="advisor-cta" data-testid="activate-agent" onClick={onActivate}>
+          Activate agent
+        </button>
+      </aside>
     </>
   )
 }
@@ -672,76 +755,96 @@ export interface OnboardingProps {
 }
 
 /**
- * The agent onboarding wizard: a four-step flow (Portfolio → Borrow →
- * Mandate → Review) that builds and validates an {@link IntentConfig} live
- * against the domain engine, with a health-factor meter on the borrow step
- * and a pre-activation agent preview on the review step as the two moments
- * that show the product working before the user commits.
+ * The agent onboarding wizard: a three-screen flow (Build your position →
+ * Mandate → Review & activate) that builds and validates an
+ * {@link IntentConfig} live against the domain engine, in the 0x.credit
+ * cockpit design language. Screen 1 merges stock selection, deposits, and
+ * borrow into one screen with a live health-factor readout; screen 3 carries
+ * the pre-activation agent preview as the second aha moment.
  */
 export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate, onSkipDemo }: OnboardingProps) {
-  const [step, setStep] = useState(1)
-  const [weightPercents, setWeightPercents] = useState<Record<UnderlyingId, number>>(() =>
-    initialWeightPercents(initialConfig),
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+
+  const [deposits, setDeposits] = useState<Record<UnderlyingId, DepositRowState>>(() =>
+    initialDepositState(initialConfig),
   )
-  const [collateralUsd, setCollateralUsd] = useState(() =>
-    totalDepositsUsd(initialConfig?.deposits ?? DEFAULT_INTENT.deposits),
-  )
-  const [collateralInput, setCollateralInput] = useState(() =>
-    formatUsd(totalDepositsUsd(initialConfig?.deposits ?? DEFAULT_INTENT.deposits)),
-  )
-  const [borrowState, setBorrowState] = useState<Record<Stablecoin, BorrowCardState>>(() =>
-    initialBorrowState(initialConfig),
-  )
-  const [amountInputs, setAmountInputs] = useState<Record<Stablecoin, string>>(() => {
-    const initial = initialBorrowState(initialConfig)
-    const out = {} as Record<Stablecoin, string>
-    for (const coin of STABLECOIN_ORDER) out[coin] = formatUsd(initial[coin].amountUsd)
-    return out
+
+  const [usdcAmount, setUsdcAmount] = useState(() => borrowAmount(initialConfig, 'USDC'))
+  const [usdcInput, setUsdcInput] = useState(() => {
+    const amount = borrowAmount(initialConfig, 'USDC')
+    return amount > 0 ? formatUsd(amount) : ''
   })
+
+  const [usdtEnabled, setUsdtEnabled] = useState(() => borrowAmount(initialConfig, 'USDT') > 0)
+  const [usdtAmount, setUsdtAmount] = useState(() => borrowAmount(initialConfig, 'USDT'))
+  const [usdtInput, setUsdtInput] = useState(() => {
+    const amount = borrowAmount(initialConfig, 'USDT')
+    return amount > 0 ? formatUsd(amount) : ''
+  })
+
+  const [usdeEnabled, setUsdeEnabled] = useState(() => borrowAmount(initialConfig, 'USDe') > 0)
+  const [usdeAmount, setUsdeAmount] = useState(() => borrowAmount(initialConfig, 'USDe'))
+  const [usdeInput, setUsdeInput] = useState(() => {
+    const amount = borrowAmount(initialConfig, 'USDe')
+    return amount > 0 ? formatUsd(amount) : ''
+  })
+
   const [mode, setMode] = useState<IntentConfig['mode']>(initialConfig?.mode ?? DEFAULT_INTENT.mode)
   const [permissions, setPermissions] = useState<Record<string, boolean>>(
     initialConfig?.permissions ?? DEFAULT_INTENT.permissions,
   )
   const [interventionHf, setInterventionHf] = useState(initialConfig?.interventionHf ?? DEFAULT_INTENT.interventionHf)
 
-  const weightTotal = UNDERLYING_ORDER.reduce((acc, id) => acc + (weightPercents[id] ?? 0), 0)
+  const selectedIds = UNDERLYING_ORDER.filter(id => deposits[id].selected)
 
-  // Step 1 keeps its existing percent-slider UI; deposits are derived from it
-  // locally rather than the wizard operating on the deposits API directly
-  // (Pass C2 rebuilds this screen around deposits — this pass is compile-only).
-  const deposits = useMemo(
-    () => depositsFromWeightPercents(weightPercents, collateralUsd),
-    [weightPercents, collateralUsd],
-  )
-  const targetWeights = useMemo(() => derivedTargetWeights(deposits), [deposits])
+  const depositsRecord: Record<UnderlyingId, number> = useMemo(() => {
+    const out = {} as Record<UnderlyingId, number>
+    for (const id of UNDERLYING_ORDER) out[id] = deposits[id].selected ? deposits[id].amountUsd : 0
+    return out
+  }, [deposits])
 
-  const borrows: IntentBorrow[] = useMemo(
-    () =>
-      STABLECOIN_ORDER.filter(coin => borrowState[coin].checked).map(coin => ({
-        stablecoin: coin,
-        amountUsd: borrowState[coin].amountUsd,
-      })),
-    [borrowState],
-  )
+  const totalDeposits = totalDepositsUsd(depositsRecord)
+
+  const borrows: IntentBorrow[] = useMemo(() => {
+    const list: IntentBorrow[] = [{ stablecoin: 'USDC', amountUsd: usdcAmount }]
+    if (usdtEnabled) list.push({ stablecoin: 'USDT', amountUsd: usdtAmount })
+    if (usdeEnabled) list.push({ stablecoin: 'USDe', amountUsd: usdeAmount })
+    return list
+  }, [usdcAmount, usdtEnabled, usdtAmount, usdeEnabled, usdeAmount])
+
+  const otherBorrowsForUsdc = borrows.filter(b => b.stablecoin !== 'USDC')
 
   const config: IntentConfig = useMemo(
-    () => ({
-      deposits,
-      borrows,
-      mode,
-      permissions,
-      interventionHf,
-    }),
-    [deposits, borrows, mode, permissions, interventionHf],
+    () => ({ deposits: depositsRecord, borrows, mode, permissions, interventionHf }),
+    [depositsRecord, borrows, mode, permissions, interventionHf],
   )
 
-  const collateral = useMemo(() => buildCollateralFromDeposits(deposits), [deposits])
+  const collateral = useMemo(() => buildCollateralFromDeposits(depositsRecord), [depositsRecord])
   const capacity = useMemo(() => maxBorrowUsd(collateral, HERO_UNDERLYINGS, MARKET), [collateral])
   const totalBorrowUsd = borrows.reduce((acc, b) => acc + b.amountUsd, 0)
-  const projected = useMemo(() => projectIntentHf(deposits, borrows), [deposits, borrows])
+  const projected = useMemo(() => projectIntentHf(depositsRecord, borrows), [depositsRecord, borrows])
   const validation = useMemo(() => validateIntent(config), [config])
+  const targetWeights = useMemo(() => derivedTargetWeights(depositsRecord), [depositsRecord])
 
-  const assessment = useMemo(
+  const presetAmounts = useMemo(
+    () =>
+      RISK_PRESETS.map(preset => ({
+        id: preset.id,
+        label: preset.label,
+        amount:
+          preset.id === 'max'
+            ? maxUsdcBorrowUsd(depositsRecord, otherBorrowsForUsdc)
+            : usdcForTargetHf(depositsRecord, otherBorrowsForUsdc, preset.targetHf as number),
+      })),
+    [depositsRecord, otherBorrowsForUsdc],
+  )
+
+  const otherFaceForUsdt = usdcAmount + (usdeEnabled ? usdeAmount : 0)
+  const otherFaceForUsde = usdcAmount + (usdtEnabled ? usdtAmount : 0)
+  const usdtMax = maxUsdtFaceUsd(otherFaceForUsdt)
+  const usdeMax = maxUsdeFaceUsd(otherFaceForUsde)
+
+  const assessment: Assessment = useMemo(
     () =>
       assessPosition({
         collateral,
@@ -755,123 +858,160 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
     [collateral, borrows, targetWeights, interventionHf],
   )
 
-  const setWeight = (id: UnderlyingId, value: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(value)))
-    setWeightPercents(prev => ({ ...prev, [id]: clamped }))
+  const toggleStock = (id: UnderlyingId, selected: boolean) =>
+    setDeposits(prev => ({
+      ...prev,
+      [id]: selected ? { ...prev[id], selected } : { selected: false, amountUsd: 0, input: '' },
+    }))
+
+  const handleDepositChange = (id: UnderlyingId, raw: string) =>
+    setDeposits(prev => ({ ...prev, [id]: { ...prev[id], input: raw, amountUsd: parseUsdInput(raw) } }))
+
+  const handleDepositBlur = (id: UnderlyingId) =>
+    setDeposits(prev => ({
+      ...prev,
+      [id]: { ...prev[id], input: prev[id].amountUsd > 0 ? formatUsd(prev[id].amountUsd) : '' },
+    }))
+
+  const applyDepositPreset = (id: UnderlyingId, amount: number) =>
+    setDeposits(prev => ({ ...prev, [id]: { ...prev[id], amountUsd: amount, input: formatUsd(amount) } }))
+
+  const handleUsdcChange = (raw: string) => {
+    setUsdcInput(raw)
+    setUsdcAmount(parseUsdInput(raw))
+  }
+  const handleUsdcBlur = () => setUsdcInput(usdcAmount > 0 ? formatUsd(usdcAmount) : '')
+  const applyUsdcPreset = (amount: number) => {
+    setUsdcAmount(amount)
+    setUsdcInput(amount > 0 ? formatUsd(amount) : '')
   }
 
-  const handleNormalize = () => setWeightPercents(prev => normalizeWeights(prev))
-
-  const toggleCoin = (coin: Stablecoin, checked: boolean) =>
-    setBorrowState(prev => ({ ...prev, [coin]: { ...prev[coin], checked } }))
-
-  const setCoinAmount = (coin: Stablecoin, amountUsd: number) =>
-    setBorrowState(prev => ({ ...prev, [coin]: { ...prev[coin], amountUsd: Math.max(0, amountUsd) } }))
-
-  const handleAmountChange = (coin: Stablecoin, raw: string) => {
-    setAmountInputs(prev => ({ ...prev, [coin]: raw }))
-    setCoinAmount(coin, parseUsdInput(raw))
+  const handleUsdtChange = (raw: string) => {
+    setUsdtInput(raw)
+    setUsdtAmount(parseUsdInput(raw))
+  }
+  const handleUsdtBlur = () => {
+    const clamped = Math.max(0, Math.min(usdtAmount, usdtMax))
+    setUsdtAmount(clamped)
+    setUsdtInput(clamped > 0 ? formatUsd(clamped) : '')
   }
 
-  const handleAmountFocus = (coin: Stablecoin) =>
-    setAmountInputs(prev => ({ ...prev, [coin]: String(borrowState[coin].amountUsd) }))
+  const handleUsdeChange = (raw: string) => {
+    setUsdeInput(raw)
+    setUsdeAmount(parseUsdInput(raw))
+  }
+  const handleUsdeBlur = () => {
+    const clamped = Math.max(0, Math.min(usdeAmount, usdeMax))
+    setUsdeAmount(clamped)
+    setUsdeInput(clamped > 0 ? formatUsd(clamped) : '')
+  }
 
-  const handleAmountBlur = (coin: Stablecoin) =>
-    setAmountInputs(prev => ({ ...prev, [coin]: formatUsd(borrowState[coin].amountUsd) }))
+  const toggleUsdt = (enabled: boolean) => {
+    setUsdtEnabled(enabled)
+    if (!enabled) {
+      setUsdtAmount(0)
+      setUsdtInput('')
+    }
+  }
+  const toggleUsde = (enabled: boolean) => {
+    setUsdeEnabled(enabled)
+    if (!enabled) {
+      setUsdeAmount(0)
+      setUsdeInput('')
+    }
+  }
 
   const setPermission = (key: string, value: boolean) => setPermissions(prev => ({ ...prev, [key]: value }))
 
-  const commitCollateral = () => {
-    const value = Math.max(1_000_000, parseUsdInput(collateralInput))
-    setCollateralUsd(value)
-    setCollateralInput(formatUsd(value))
-  }
+  const canContinueStep1 = validation.ok
+  const step1Reason = canContinueStep1 ? undefined : validation.errors[0]?.message
 
-  const canContinueStep1 = weightTotal === 100
-  const canContinueStep2 = validation.ok
-  const canContinue = step === 1 ? canContinueStep1 : step === 2 ? canContinueStep2 : true
-  const blockingReason =
-    step === 1 && !canContinueStep1
-      ? `Target weights total ${weightTotal}% — they must add up to 100% before you continue.`
-      : step === 2 && !canContinueStep2
-        ? validation.errors[0]?.message
-        : undefined
-
-  const goBack = () => setStep(s => Math.max(1, s - 1))
-  const goNext = () => setStep(s => Math.min(4, s + 1))
+  const goBack = () => setStep(s => (s === 3 ? 2 : 1))
+  const goToMandate = () => setStep(2)
+  const goToReview = () => setStep(3)
 
   return (
     <div className="advisor-wizard">
-      <div className="advisor-brand-row">
-        <span className="advisor-brand">0x.credit</span>
-        <span className="advisor-brand-sub">Robo-Advisor</span>
+      <div className="advisor-card">
+        <header className="advisor-topbar">
+          <span className="advisor-brand-mark" aria-hidden="true">
+            0x
+          </span>
+          <span className="advisor-topbar-divider" aria-hidden="true" />
+          <span className="advisor-topbar-label">Robo-Advisor</span>
+        </header>
+
+        <div className="advisor-body">
+          {step === 1 && (
+            <Screen1
+              deposits={deposits}
+              onToggleStock={toggleStock}
+              onDepositChange={handleDepositChange}
+              onDepositBlur={handleDepositBlur}
+              onDepositPreset={applyDepositPreset}
+              selectedIds={selectedIds}
+              totalDeposits={totalDeposits}
+              usdcInput={usdcInput}
+              onUsdcChange={handleUsdcChange}
+              onUsdcBlur={handleUsdcBlur}
+              presetAmounts={presetAmounts}
+              onApplyUsdcPreset={applyUsdcPreset}
+              usdtEnabled={usdtEnabled}
+              onToggleUsdt={toggleUsdt}
+              usdtInput={usdtInput}
+              onUsdtChange={handleUsdtChange}
+              onUsdtBlur={handleUsdtBlur}
+              usdtMax={usdtMax}
+              usdeEnabled={usdeEnabled}
+              onToggleUsde={toggleUsde}
+              usdeInput={usdeInput}
+              onUsdeChange={handleUsdeChange}
+              onUsdeBlur={handleUsdeBlur}
+              usdeMax={usdeMax}
+              projectedHf={projected.healthFactor}
+              capacity={capacity}
+              totalBorrowUsd={totalBorrowUsd}
+              errors={validation.errors}
+              canContinue={canContinueStep1}
+              reason={step1Reason}
+              onContinue={goToMandate}
+              onSkipDemo={onSkipDemo}
+              appliedChangesNotice={appliedChangesNotice}
+            />
+          )}
+          {step === 2 && (
+            <Screen2
+              mode={mode}
+              onModeChange={setMode}
+              permissions={permissions}
+              onPermissionChange={setPermission}
+              interventionHf={interventionHf}
+              onInterventionChange={setInterventionHf}
+              totalDeposits={totalDeposits}
+              totalBorrowUsd={totalBorrowUsd}
+              projectedHf={projected.healthFactor}
+              onBack={goBack}
+              onContinue={goToReview}
+            />
+          )}
+          {step === 3 && (
+            <Screen3
+              selectedIds={selectedIds}
+              deposits={deposits}
+              borrows={borrows}
+              mode={mode}
+              permissions={permissions}
+              interventionHf={interventionHf}
+              projectedHf={projected.healthFactor}
+              capacity={capacity}
+              totalBorrowUsd={totalBorrowUsd}
+              assessment={assessment}
+              onBack={goBack}
+              onActivate={() => onActivate(config)}
+            />
+          )}
+        </div>
       </div>
-
-      <StepRail current={step} />
-
-      <section className="advisor-step-panel">
-        {step === 1 && (
-          <Step1Portfolio
-            weightPercents={weightPercents}
-            weightTotal={weightTotal}
-            collateralInput={collateralInput}
-            onCollateralChange={setCollateralInput}
-            onCollateralBlur={commitCollateral}
-            onWeightChange={setWeight}
-            onNormalize={handleNormalize}
-            onSkipDemo={onSkipDemo}
-            appliedChangesNotice={appliedChangesNotice}
-          />
-        )}
-        {step === 2 && (
-          <Step2Borrow
-            hf={projected.healthFactor}
-            interventionHf={interventionHf}
-            capacity={capacity}
-            totalBorrowUsd={totalBorrowUsd}
-            borrowState={borrowState}
-            amountInputs={amountInputs}
-            onToggleCoin={toggleCoin}
-            onAmountChange={handleAmountChange}
-            onAmountFocus={handleAmountFocus}
-            onAmountBlur={handleAmountBlur}
-            errors={validation.errors}
-          />
-        )}
-        {step === 3 && (
-          <Step3Mandate
-            mode={mode}
-            onModeChange={setMode}
-            permissions={permissions}
-            onPermissionChange={setPermission}
-            interventionHf={interventionHf}
-            onInterventionChange={setInterventionHf}
-          />
-        )}
-        {step === 4 && (
-          <Step4Review
-            weightPercents={weightPercents}
-            borrows={borrows}
-            mode={mode}
-            permissions={permissions}
-            interventionHf={interventionHf}
-            projectedHf={projected.healthFactor}
-            capacity={capacity}
-            totalBorrowUsd={totalBorrowUsd}
-            assessment={assessment}
-          />
-        )}
-
-        <WizardFooter
-          step={step}
-          canContinue={step === 4 ? true : canContinue}
-          reason={blockingReason}
-          onBack={goBack}
-          onContinue={step === 4 ? () => onActivate(config) : goNext}
-          continueLabel={step === 4 ? 'Activate agent' : 'Continue'}
-          continueTestId={step === 4 ? 'activate-agent' : undefined}
-        />
-      </section>
     </div>
   )
 }

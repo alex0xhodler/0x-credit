@@ -1,52 +1,142 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AdvisorApp } from './AdvisorApp'
-import { DEFAULT_INTENT, maxBorrowUsd, projectIntentHf, buildCollateralFromDeposits } from '../lib/advisor/onboarding/intent'
-import { HERO_NOW, HERO_UNDERLYINGS } from '../lib/advisor/fixtures/heroScenario'
-
-const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
 function renderApp() {
   return render(<AdvisorApp />)
 }
 
-function goToStep2() {
-  fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+/** The catalog row `<div class="advisor-stock-row">` containing the given symbol's select checkbox. */
+function stockRow(symbol: string): HTMLElement {
+  const checkbox = screen.getByRole('checkbox', { name: new RegExp(`^select ${symbol}$`, 'i') })
+  const row = checkbox.closest('.advisor-stock-row')
+  if (!row) throw new Error(`stock row not found for ${symbol}`)
+  return row as HTMLElement
 }
 
-function goToStep3() {
-  goToStep2()
-  fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+function selectStock(symbol: string) {
+  fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^select ${symbol}$`, 'i') }))
 }
 
-function goToStep4() {
-  goToStep3()
-  fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+function setDepositByTyping(symbol: string, rawAmount: string) {
+  const input = screen.getByLabelText(new RegExp(`${symbol} deposit amount`, 'i'))
+  fireEvent.change(input, { target: { value: rawAmount } })
+  fireEvent.blur(input)
 }
 
-describe('Onboarding — step 1 portfolio', () => {
-  it('shows weight inputs and enables Continue at the default 100%', () => {
+/** Selects NVDA and deposits $5M via its preset pill — the minimal valid (single-stock, zero-borrow) position. */
+function buildMinimalValidPosition() {
+  selectStock('NVDA')
+  fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+}
+
+function goToScreen2() {
+  buildMinimalValidPosition()
+  fireEvent.click(screen.getByRole('button', { name: /continue to mandate/i }))
+}
+
+function goToScreen3() {
+  goToScreen2()
+  fireEvent.click(screen.getByRole('button', { name: /continue to review/i }))
+}
+
+describe('Onboarding — screen 1: build your position', () => {
+  it('starts with no stocks selected and Continue disabled with a reason', () => {
     renderApp()
-    expect(screen.getByLabelText(/nvda target weight/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/spy target weight/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/aapl target weight/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/spacex target weight/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled()
+    expect(screen.getByRole('checkbox', { name: /^select nvda$/i })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /^select spy$/i })).not.toBeChecked()
+    expect(screen.queryByLabelText(/nvda deposit amount/i)).not.toBeInTheDocument()
+
+    const cta = screen.getByRole('button', { name: /continue to mandate/i })
+    expect(cta).toBeDisabled()
+    expect(screen.getAllByText(/deposit some collateral/i).length).toBeGreaterThan(0)
   })
 
-  it('disables Continue and shows a reason when weights no longer total 100%, then Normalize fixes it', () => {
+  it('shows the USDC borrow input even before any stock is selected', () => {
     renderApp()
-    const nvdaInput = screen.getByLabelText(/nvda target weight/i)
-    fireEvent.change(nvdaInput, { target: { value: '50' } })
+    expect(screen.getByLabelText(/usdc borrow amount/i)).toBeInTheDocument()
+  })
 
-    expect(screen.getAllByText(/110%/).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
-    expect(screen.getByText(/must add up to 100%/i)).toBeInTheDocument()
+  it('selecting a stock reveals its deposit input; the $5M preset sets it', () => {
+    renderApp()
+    selectStock('NVDA')
+    const input = screen.getByLabelText(/nvda deposit amount/i)
+    expect(input).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /normalize/i }))
+    fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+    expect(screen.getByLabelText(/nvda deposit amount/i)).toHaveValue('$5,000,000')
+  })
 
-    expect(screen.getByText(/total: 100%/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled()
+  it('builds the default-intent deposit shape via the UI and totals the collateral in the rail', () => {
+    renderApp()
+    selectStock('NVDA')
+    fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+    selectStock('SPY')
+    setDepositByTyping('SPY', '3750000')
+    selectStock('AAPL')
+    fireEvent.click(within(stockRow('AAPL')).getByRole('button', { name: '$2.5M' }))
+    selectStock('SPACEX')
+    setDepositByTyping('SPACEX', '1250000')
+
+    expect(screen.getByLabelText(/nvda deposit amount/i)).toHaveValue('$5,000,000')
+    expect(screen.getByLabelText(/spy deposit amount/i)).toHaveValue('$3,750,000')
+    expect(screen.getByLabelText(/aapl deposit amount/i)).toHaveValue('$2,500,000')
+    expect(screen.getByLabelText(/spacex deposit amount/i)).toHaveValue('$1,250,000')
+    expect(screen.getByText(/\$12,500,000/)).toBeInTheDocument()
+  })
+
+  it('clicking the Balanced preset sets a positive USDC amount with projected HF near 1.6', () => {
+    renderApp()
+    selectStock('NVDA')
+    fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+    selectStock('SPY')
+    setDepositByTyping('SPY', '3750000')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Balanced' }))
+
+    const usdcInput = screen.getByLabelText(/usdc borrow amount/i) as HTMLInputElement
+    expect(parseFloat(usdcInput.value.replace(/[^0-9.]/g, ''))).toBeGreaterThan(0)
+
+    const hf = Number(screen.getByTestId('screen1-hf-value').textContent)
+    expect(hf).toBeGreaterThan(1.55)
+    expect(hf).toBeLessThan(1.65)
+  })
+
+  it('enabling USDT shows its input with a live max hint, and an over-cap amount is clamped on blur', () => {
+    renderApp()
+    selectStock('NVDA')
+    fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+    selectStock('SPY')
+    setDepositByTyping('SPY', '3750000')
+
+    const usdcInput = screen.getByLabelText(/usdc borrow amount/i)
+    fireEvent.change(usdcInput, { target: { value: '1000000' } })
+    fireEvent.blur(usdcInput)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /\+ usdt/i }))
+    const usdtInput = screen.getByLabelText(/usdt borrow amount/i)
+    expect(usdtInput).toBeInTheDocument()
+    expect(screen.getByText(/up to \$1,500,000/)).toBeInTheDocument()
+
+    fireEvent.change(usdtInput, { target: { value: '5000000' } })
+    expect(screen.getAllByText(/permitted share/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /continue to mandate/i })).toBeDisabled()
+
+    fireEvent.blur(usdtInput)
+    expect(usdtInput).toHaveValue('$1,500,000')
+    expect(screen.getByRole('button', { name: /continue to mandate/i })).toBeEnabled()
+  })
+
+  it('the Max preset with SPACEX selected keeps validateIntent passing (private-equity floor respected)', () => {
+    renderApp()
+    selectStock('SPACEX')
+    setDepositByTyping('SPACEX', '1250000')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Max' }))
+
+    const usdcInput = screen.getByLabelText(/usdc borrow amount/i) as HTMLInputElement
+    expect(parseFloat(usdcInput.value.replace(/[^0-9.]/g, ''))).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /continue to mandate/i })).toBeEnabled()
   })
 
   it('skip-demo goes directly to the dashboard', () => {
@@ -56,55 +146,11 @@ describe('Onboarding — step 1 portfolio', () => {
   })
 })
 
-describe('Onboarding — step 2 borrow', () => {
-  it('shows the hf-meter with a projected value above 1.5 at defaults', () => {
-    renderApp()
-    goToStep2()
-    expect(screen.getByTestId('hf-meter')).toBeInTheDocument()
-    const value = Number(screen.getByTestId('projected-hf-value').textContent)
-    expect(value).toBeGreaterThan(1.5)
-  })
-
-  it('decreases the projected HF when the USDC amount is raised', () => {
-    renderApp()
-    goToStep2()
-    const before = Number(screen.getByTestId('projected-hf-value').textContent)
-    const usdcInput = screen.getByLabelText(/usdc amount/i)
-    fireEvent.change(usdcInput, { target: { value: '8000000' } })
-    const after = Number(screen.getByTestId('projected-hf-value').textContent)
-    expect(after).toBeLessThan(before)
-  })
-
-  it('flags borrow above the origination limit and disables Continue', () => {
-    renderApp()
-    goToStep2()
-    const usdcInput = screen.getByLabelText(/usdc amount/i)
-    fireEvent.change(usdcInput, { target: { value: '9000000' } })
-    expect(screen.getAllByText(/origination limit/i).length).toBeGreaterThan(0)
-    expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
-  })
-
-  it('flags the private-equity minimum HF rule when borrow stays under capacity but HF drops below 1.50', () => {
-    const deposits = DEFAULT_INTENT.deposits
-    const borrows = [{ stablecoin: 'USDC' as const, amountUsd: 6_500_000 }]
-
-    const capacity = maxBorrowUsd(buildCollateralFromDeposits(deposits), HERO_UNDERLYINGS, MARKET)
-    expect(6_500_000).toBeLessThan(capacity)
-    const projected = projectIntentHf(deposits, borrows)
-    expect(projected.healthFactor).toBeLessThan(1.5)
-
-    renderApp()
-    goToStep2()
-    const usdcInput = screen.getByLabelText(/usdc amount/i)
-    fireEvent.change(usdcInput, { target: { value: '6500000' } })
-    expect(screen.getAllByText(/1\.50/).length).toBeGreaterThan(0)
-  })
-})
-
-describe('Onboarding — step 3 mandate', () => {
+describe('Onboarding — screen 2: mandate', () => {
   it('defaults to semi-automatic and switches to automatic on click', () => {
     renderApp()
-    goToStep3()
+    goToScreen2()
+
     expect(within(screen.getByTestId('mode-semi')).getByRole('radio')).toBeChecked()
 
     fireEvent.click(screen.getByTestId('mode-auto'))
@@ -112,17 +158,32 @@ describe('Onboarding — step 3 mandate', () => {
   })
 })
 
-describe('Onboarding — step 4 review & activate', () => {
-  it('shows the agent preview and watch list, and activates into the dashboard', () => {
+describe('Onboarding — screen 3: review & activate', () => {
+  it('summarizes the entered deposits and borrow, shows the agent preview, and activates into the dashboard', () => {
     renderApp()
-    goToStep4()
+    selectStock('NVDA')
+    fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+    selectStock('SPY')
+    setDepositByTyping('SPY', '3750000')
+    fireEvent.click(screen.getByRole('button', { name: 'Balanced' }))
+    fireEvent.click(screen.getByRole('button', { name: /continue to mandate/i }))
+    fireEvent.click(screen.getByRole('button', { name: /continue to review/i }))
+
+    expect(screen.getByText(/\$5,000,000/)).toBeInTheDocument()
+    expect(screen.getByText(/\$3,750,000/)).toBeInTheDocument()
 
     const preview = screen.getByTestId('agent-preview')
     expect(within(preview).getByText(/risk-off signals on nvda/i)).toBeInTheDocument()
     expect(within(preview).getByText(/what your agent watches/i)).toBeInTheDocument()
-    expect(within(preview).getByText(/external signals/i)).toBeInTheDocument()
 
     fireEvent.click(screen.getByTestId('activate-agent'))
     expect(screen.getByTestId('hf-gauge')).toBeInTheDocument()
+  })
+
+  it('shows the exec steps with step 3 active after navigating through all screens', () => {
+    renderApp()
+    goToScreen3()
+    const steps = screen.getByLabelText(/execution steps/i)
+    expect(within(steps).getByText('Review')).toBeInTheDocument()
   })
 })

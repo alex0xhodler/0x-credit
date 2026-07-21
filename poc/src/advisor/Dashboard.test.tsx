@@ -104,6 +104,6 @@ describe('Dashboard', () => {
   it('reconfigure returns to the onboarding wizard', () => {
     renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: 'Reconfigure' }))
-    expect(screen.getByRole('heading', { name: /define your portfolio/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /build your position/i })).toBeInTheDocument()
   })
 })

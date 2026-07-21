@@ -386,6 +386,9 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     <div className="advisor-dashboard">
       <header className="advisor-dash-header">
         <div className="advisor-brand-row">
+          <span className="advisor-brand-mark" aria-hidden="true">
+            0x
+          </span>
           <span className="advisor-brand">0x.credit</span>
           <span className="advisor-brand-sub">Robo-Advisor</span>
         </div>
