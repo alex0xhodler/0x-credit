@@ -519,3 +519,13 @@ demo scope), A9 (wizard-first by explicit product-owner mandate, aha moved into
 the wizard). No stalemate. Rollout: two sequential code passes (A: intent
 module + wizard; B: dashboard restructure) with a supervisor verification gate
 (tests, types, lint, build, real-browser screenshots) after each.
+
+## Outcome
+
+Shipped in two gated passes as decided. Gate A: 188 tests, wizard verified
+step-by-step in a real browser (two visual-defect fix rounds: unstyled CTAs
+from a cross-stylesheet .advisor-btn collision, meter tick placement/overlap).
+Gate B: 189 tests, dashboard restructure verified end-to-end including the
+skip-demo reflexive scenario (banner + high-urgency refinance proposal) and
+the wizard-path case where no USDe debt exists and the loop correctly does
+not fire. All engine behavior preserved; old dashboard files removed.

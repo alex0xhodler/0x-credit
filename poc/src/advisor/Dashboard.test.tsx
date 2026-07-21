@@ -1,22 +1,29 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { AdvisorDashboard } from './AdvisorDashboard'
+import { AdvisorApp } from './AdvisorApp'
 
 function renderDashboard() {
-  return render(<AdvisorDashboard />)
+  render(<AdvisorApp />)
+  fireEvent.click(screen.getByTestId('skip-demo'))
 }
 
-describe('AdvisorDashboard', () => {
-  it('shows the health factor from the hero scenario with a healthy status', () => {
+/** Expands a proposal's disclosure body if it is not already open. */
+function expandProposal(testId: string) {
+  const card = screen.getByTestId(testId)
+  const toggle = within(card).getByRole('button', { expanded: false })
+  fireEvent.click(toggle)
+}
+
+describe('Dashboard', () => {
+  it('shows a healthy health factor above 1.5', () => {
     renderDashboard()
     const gauge = screen.getByTestId('hf-gauge')
     expect(within(gauge).getByText(/healthy/i)).toBeInTheDocument()
-    // Hero HF ≈ 1.86 — assert the rendered number parses above intervention.
     const value = Number(within(gauge).getByTestId('hf-value').textContent)
     expect(value).toBeGreaterThan(1.5)
   })
 
-  it('renders the basket at the underlying level with weights', () => {
+  it('renders the basket at the underlying level', () => {
     renderDashboard()
     const basket = screen.getByTestId('basket-panel')
     expect(within(basket).getByText('NVDA')).toBeInTheDocument()
@@ -25,9 +32,13 @@ describe('AdvisorDashboard', () => {
     expect(within(basket).getByText('SPACEX')).toBeInTheDocument()
   })
 
-  it('surfaces the earnings-risk proposal with rationale and contributing signal', () => {
+  it('surfaces the NVDA proposal first and already expanded', () => {
     renderDashboard()
+    const cards = screen.getAllByTestId(/^proposal-/)
+    expect(cards[0]).toHaveAttribute('data-testid', 'proposal-reduce_weight:EQUITY:NVDA')
     const proposal = screen.getByTestId('proposal-reduce_weight:EQUITY:NVDA')
+    const toggle = within(proposal).getByRole('button', { expanded: true })
+    expect(toggle).toBeInTheDocument()
     expect(within(proposal).getByText(/risk-off signals on nvda/i)).toBeInTheDocument()
     expect(within(proposal).getByText(/refinitiv earnings calendar/i)).toBeInTheDocument()
   })
@@ -42,7 +53,7 @@ describe('AdvisorDashboard', () => {
     expect(after).not.toBe(before)
   })
 
-  it('approving the proposal applies the rebalance and raises the displayed HF', () => {
+  it('approving the proposal applies the rebalance, raises HF, and removes the card', () => {
     renderDashboard()
     const gauge = screen.getByTestId('hf-gauge')
     const hfBefore = Number(within(gauge).getByTestId('hf-value').textContent)
@@ -50,7 +61,6 @@ describe('AdvisorDashboard', () => {
     fireEvent.click(within(proposal).getByRole('button', { name: /approve/i }))
     const hfAfter = Number(within(screen.getByTestId('hf-gauge')).getByTestId('hf-value').textContent)
     expect(hfAfter).toBeGreaterThan(hfBefore)
-    // The acted-on proposal leaves the queue.
     expect(screen.queryByTestId('proposal-reduce_weight:EQUITY:NVDA')).not.toBeInTheDocument()
   })
 
@@ -65,23 +75,35 @@ describe('AdvisorDashboard', () => {
     expect(hfAfter).toBeCloseTo(hfBefore, 2)
   })
 
-  it('enabling the reflexive scenario surfaces the wrong-way warning and refinance proposal', () => {
+  it('enabling the reflexive scenario surfaces the wrong-way warning and moves the refinance proposal first', () => {
     renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: /simulate securitize/i }))
+
     const panel = screen.getByTestId('reflexive-panel')
     expect(within(panel).getByText(/securitize/i)).toBeInTheDocument()
     expect(within(panel).getByText(/hits both sides/i)).toBeInTheDocument()
+
+    const cards = screen.getAllByTestId(/^proposal-/)
+    expect(cards[0]).toHaveAttribute('data-testid', 'proposal-refinance_stablecoin:USDe')
+
+    expandProposal('proposal-refinance_stablecoin:USDe')
     const refinance = screen.getByTestId('proposal-refinance_stablecoin:USDe')
     expect(within(refinance).getByText(/break the loop/i)).toBeInTheDocument()
   })
 
-  it('approving the refinance moves USDe debt into USDC', () => {
+  it('approving the refinance removes USDe from the borrow panel', () => {
     renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: /simulate securitize/i }))
+    expandProposal('proposal-refinance_stablecoin:USDe')
     const refinance = screen.getByTestId('proposal-refinance_stablecoin:USDe')
     fireEvent.click(within(refinance).getByRole('button', { name: /approve/i }))
-    // USDe row disappears from the borrow summary once refinanced.
     const borrow = screen.getByTestId('borrow-panel')
     expect(within(borrow).queryByText('USDe')).not.toBeInTheDocument()
+  })
+
+  it('reconfigure returns to the onboarding wizard', () => {
+    renderDashboard()
+    fireEvent.click(screen.getByRole('button', { name: 'Reconfigure' }))
+    expect(screen.getByRole('heading', { name: /define your portfolio/i })).toBeInTheDocument()
   })
 })

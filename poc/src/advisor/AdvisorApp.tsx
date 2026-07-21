@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './advisor.css'
-import { AdvisorDashboard } from '../AdvisorDashboard'
+import { Dashboard } from './Dashboard'
 import { Onboarding } from './Onboarding'
 import { DEFAULT_INTENT, type IntentConfig } from '../lib/advisor/onboarding/intent'
 
@@ -10,24 +10,25 @@ type Phase = 'onboarding' | 'dashboard'
  * Container for the two-phase advisor experience: an onboarding wizard that
  * collects and validates a mandate, and the post-activation dashboard.
  *
- * Pass A keeps the dashboard phase rendering the existing, unchanged
- * {@link AdvisorDashboard}; Pass B replaces it with the restructured
- * dashboard. `appliedChanges` counts approved agent actions since activation
- * for the Reconfigure notice — wired to real mutations in Pass B, so it stays
- * 0 here.
+ * `appliedChanges` counts approved agent actions since the last activation,
+ * for the wizard's A8 reconfigure notice — Dashboard reports it back via
+ * `onAppliedChangesChange` on every approve. It resets on each fresh
+ * activation.
  */
 export function AdvisorApp() {
   const [phase, setPhase] = useState<Phase>('onboarding')
   const [confirmedIntent, setConfirmedIntent] = useState<IntentConfig | undefined>(undefined)
-  const [appliedChanges] = useState(0)
+  const [appliedChanges, setAppliedChanges] = useState(0)
 
   const handleActivate = (config: IntentConfig) => {
     setConfirmedIntent(config)
+    setAppliedChanges(0)
     setPhase('dashboard')
   }
 
   const handleSkipDemo = () => {
     setConfirmedIntent(DEFAULT_INTENT)
+    setAppliedChanges(0)
     setPhase('dashboard')
   }
 
@@ -45,12 +46,11 @@ export function AdvisorApp() {
           onSkipDemo={handleSkipDemo}
         />
       ) : (
-        <>
-          <button type="button" className="advisor-app-reconfigure" onClick={handleReconfigure}>
-            Reconfigure
-          </button>
-          <AdvisorDashboard />
-        </>
+        <Dashboard
+          intent={confirmedIntent ?? DEFAULT_INTENT}
+          onReconfigure={handleReconfigure}
+          onAppliedChangesChange={setAppliedChanges}
+        />
       )}
     </div>
   )
