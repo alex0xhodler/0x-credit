@@ -64,7 +64,7 @@ const baseProps = {
 describe('TransactionCockpit — cockpit layout', () => {
   it('renders the compact brand cue and a strategy tab for each opportunity', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByLabelText('0x.credit')).toBeInTheDocument()
+    expect(screen.getByLabelText('Institutional Credit')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /wsteth/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /weth/i })).toBeInTheDocument()
   })
@@ -164,7 +164,25 @@ describe('TransactionCockpit — cockpit layout', () => {
 
   it('renders the deposit input with the current amount', () => {
     render(<TransactionCockpit {...baseProps} />)
-    expect(screen.getByLabelText(/deposit amount/i)).toHaveValue('3')
+    expect(screen.getByLabelText(/collateral amount/i)).toHaveValue('3')
+  })
+
+  it('lists every supplied tokenized asset as collateral context without treating it as an executable strategy', () => {
+    render(<TransactionCockpit {...baseProps} />)
+
+    const collateral = screen.getByLabelText(/eligible collateral/i)
+    expect(within(collateral).getByText('xyz:CL')).toBeInTheDocument()
+    expect(within(collateral).getByText('Crude Oil')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:SILVER')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:XYZ100')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:SP500')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:BRENTOIL')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:SKHX')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:MU')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:GOLD')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:SPCX')).toBeInTheDocument()
+    expect(within(collateral).getByText('xyz:SNDK')).toBeInTheDocument()
+    expect(within(collateral).queryByRole('button')).not.toBeInTheDocument()
   })
 
 })

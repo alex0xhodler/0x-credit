@@ -1982,7 +1982,70 @@ button {
 
 .builder-strategy {
   font-size: 12px;
+  line-height: 1.5;
   color: var(--ink-soft);
+}
+
+.eligible-collateral {
+  border-block: 1px solid var(--line);
+  padding-block: 10px;
+}
+
+.eligible-collateral-heading,
+.eligible-collateral li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.eligible-collateral-heading {
+  padding-bottom: 6px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.eligible-collateral-heading span:last-child {
+  text-align: right;
+}
+
+.eligible-collateral ul {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eligible-collateral li {
+  padding-block: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.eligible-collateral li div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.eligible-collateral li strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.eligible-collateral li div span,
+.eligible-collateral li > span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.eligible-collateral li > span {
+  text-align: right;
+  white-space: nowrap;
 }
 
 /* Deposit section */

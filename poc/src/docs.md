@@ -4,17 +4,19 @@ Path: @/poc/src
 
 ### Overview
 
-- Root of the React frontend for 0x.credit. Contains the application shell (`App.tsx`), the single-screen cockpit UI (`TransactionCockpit.tsx`), and global styles (`App.css`).
-- `App.tsx` owns all state and side-effects; `TransactionCockpit.tsx` is a pure-rendering component that receives everything via props.
+- Root of the React frontend for Institutional Credit, served from the `0x.credit` origin. Contains the application shell ([`@/poc/src/App.tsx`](App.tsx)), the single-screen cockpit UI ([`@/poc/src/TransactionCockpit.tsx`](TransactionCockpit.tsx)), and global styles ([`@/poc/src/App.css`](App.css)).
+- [`@/poc/src/App.tsx`](App.tsx) owns all application state and side-effects. [`@/poc/src/TransactionCockpit.tsx`](TransactionCockpit.tsx) receives route and execution state through props while owning static, display-only collateral context for the builder.
 - The entire user-facing flow — strategy selection, deposit configuration, wallet connection, transaction execution, and live position monitoring — is rendered in a single persistent screen called the cockpit.
 
 ### How it fits into the larger codebase
 
 - `App.tsx` is the application root mounted by `@/poc/src/main.tsx`. It composes Wagmi, React Query, and Reown AppKit providers around `GearboxApp`.
+- Institutional Credit is the shared display identity: [`@/poc/index.html`](../index.html) supplies the browser title, [`@/poc/src/config/index.tsx`](config/index.tsx) supplies the Reown metadata name consumed by [`@/poc/src/App.tsx`](App.tsx), and [`@/poc/src/TransactionCockpit.tsx`](TransactionCockpit.tsx) exposes it in visible and accessible cockpit labels. The metadata URL remains the `0x.credit` origin (or the active browser origin), separating product display identity from the connection URL.
 - `GearboxApp` calls `loadGearboxOpportunity` from `@/poc/src/lib/gearbox/live.ts` to fetch on-chain strategy data for both Monad and Ethereum Mainnet chains.
 - `opportunityViews` (the list passed to `TransactionCockpit`) is derived inside `App.tsx` by iterating `LoadedGearboxOpportunity.creditManagers` and mapping each `GearboxCreditManagerRoute` to an `OpportunityView` with numeric fields (`apyPercent`, `baseApyPercent`, `borrowRatePercent`, `leverageMultiple`, `minimumDeposit`). Each view may also carry structured, selected-route-specific `routeSteps` provenance.
 - `TransactionCockpit.tsx` loads the pinned Ethereum yield benchmarks through `@/poc/src/lib/defillamaYields.ts` and passes them, together with the selected route’s net APY, to `buildBalanceTimeline` in `@/poc/src/lib/comparisonTimeline.ts`.
 - Execution logic (approve + open credit account) lives entirely in `App.tsx`; `TransactionCockpit` surfaces progress via the `steps: ExecutionStep[]` prop, sourced from `@/poc/src/lib/gearbox/plan.ts`.
+- The builder's eligible-collateral list is module-local presentation data in [`@/poc/src/TransactionCockpit.tsx`](TransactionCockpit.tsx), styled by [`@/poc/src/App.css`](App.css); it is separate from the Gearbox routes that [`@/poc/src/App.tsx`](App.tsx) loads and maps into `OpportunityView` props.
 - CSS design tokens and all layout rules live in `App.css`; the cockpit layout classes (`.cockpit-wrap`, `.cockpit-body`, `.cockpit-chart-pane`, `.cockpit-builder`) are defined there.
 
 ### Core Implementation
@@ -57,6 +59,7 @@ cockpit-wrap
 - Benchmark fetching is best-effort and abortable. When it is unavailable, the chart still renders the selected route and the flat WETH comparison; unavailable benchmark series are omitted.
 - Strategy selector is a persistent `role="tablist"` tab bar in the header. Switching tabs calls `onSelectOpportunity`, which in `App.tsx` resets execution error, sets `forceNewAccount`, and updates `amount` to a chain-appropriate default.
 - When present, `OpportunityView.routeSteps` is rendered as a compact route summary beside the projection rather than as global partner branding; every displayed provider is paired with its operational role.
+- The right-hand builder presents tokenized-asset lending copy and maps its static eligible-collateral records to ticker, name/category, and pre-formatted 24-hour volume rows. The list has no callbacks or controls; changing the `Collateral amount` input still calls the `onAmountChange` prop and therefore updates only the amount state held by [`@/poc/src/App.tsx`](App.tsx).
 
 ### Things to Know
 
@@ -66,6 +69,7 @@ cockpit-wrap
 - `isCollapsedApproval` collapses the approve step visually once it is done, to reduce noise during the account-open step.
 - `useSimulatedPositionValue` uses a 2-second polling interval and respects `prefers-reduced-motion` — the ticker freezes when reduced motion is set.
 - `manageUrl` is only set when `hasStartedFlow && hasOpenPosition && !forceNewAccount`. `forceNewAccount` is set to `true` when the user switches strategy tabs or explicitly resets the flow, which brings the cockpit back into deposit mode even when a position exists.
+- The eligible-collateral records do not select an `OpportunityView`, alter the selected Gearbox route, participate in amount validation, or introduce collateral contracts, route loading, or transaction paths. Planning and execution continue to use the selected route from [`@/poc/src/App.tsx`](App.tsx) and [`@/poc/src/lib/gearbox/`](lib/gearbox/docs.md).
 - `shell.is-landing` and `shell.is-expanded` CSS states are legacy remnants from the previous 2-step flow. They remain in `App.css` but are no longer set by `TransactionCockpit.tsx`.
 
 Created and maintained by Nori.

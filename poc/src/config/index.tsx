@@ -9,7 +9,7 @@ export const isReownProjectConfigured = Boolean(configuredProjectId)
 export const projectId = configuredProjectId || localhostProjectId
 
 export const metadata = {
-  name: '0x.credit',
+  name: 'Institutional Credit',
   description: 'Amplified USDC yield routes on Monad',
   url: typeof window === 'undefined' ? 'https://0x.credit' : window.location.origin,
   icons: ['https://avatars.githubusercontent.com/u/179229932'],

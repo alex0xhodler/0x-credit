@@ -47,6 +47,26 @@ export interface ActivePositionStats {
   netValue: number
 }
 
+interface CollateralAsset {
+  ticker: string
+  name: string
+  category: string
+  formattedVolume: string
+}
+
+const ELIGIBLE_COLLATERAL: readonly CollateralAsset[] = [
+  { ticker: 'xyz:CL', name: 'Crude Oil', category: 'Commodity', formattedVolume: '$65.46B' },
+  { ticker: 'xyz:SILVER', name: 'Silver', category: 'Commodity', formattedVolume: '$55.34B' },
+  { ticker: 'xyz:XYZ100', name: 'Tech 100 Index', category: 'Index', formattedVolume: '$51.81B' },
+  { ticker: 'xyz:SP500', name: 'S&P 500', category: 'Index', formattedVolume: '$30.96B' },
+  { ticker: 'xyz:BRENTOIL', name: 'Brent Crude', category: 'Commodity', formattedVolume: '$30.41B' },
+  { ticker: 'xyz:SKHX', name: 'SK Hynix', category: 'Equity', formattedVolume: '$15.15B' },
+  { ticker: 'xyz:MU', name: 'Micron Technology', category: 'Equity', formattedVolume: '$14.55B' },
+  { ticker: 'xyz:GOLD', name: 'Gold', category: 'Commodity', formattedVolume: '$13.54B' },
+  { ticker: 'xyz:SPCX', name: 'SpaceX (Pre-IPO)', category: 'Private Equity', formattedVolume: '$12.35B' },
+  { ticker: 'xyz:SNDK', name: 'SanDisk / Storage', category: 'Equity', formattedVolume: '$9.94B' },
+]
+
 export type HeaderVariant = 'desk' | 'journey' | 'ticket' | 'editorial'
 export type TopbarVariant = 'identity' | 'shelf' | 'switchboard' | 'portfolio'
 
@@ -355,13 +375,13 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
   if (positionOpen) {
     return (
       <main className="shell is-invested">
-        <section className="execution-panel" aria-label="0x.credit route">
+        <section className="execution-panel" aria-label="Institutional Credit route">
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
             <w3m-button size="sm" />
           </div>
           <section className="position-live" aria-label="Open position">
             <div className="live-kicker">
-              <span>0x.credit</span>
+              <span>Institutional Credit</span>
               <strong>Position live</strong>
             </div>
             <h2>Smart account earning</h2>
@@ -400,7 +420,7 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
 
       <main aria-labelledby={pageHeadingId} className={`cockpit cockpit--variant-${headerVariant} cockpit--topbar-${topbarVariant}`}>
         <header aria-label={topbarVariant === 'identity' ? headerLabel : topbarLabel} className="cockpit-header">
-          <div aria-label="0x.credit" className="brand-row">
+          <div aria-label="Institutional Credit" className="brand-row">
             <span className="brand-mark" aria-hidden="true">0x</span>
           </div>
 
@@ -525,24 +545,37 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
           <section className="cockpit-builder" aria-label="Open Smart account">
             <div className="builder-scroll">
             <div className="builder-heading">
-              <span className="selected-label">Selected strategy</span>
+              <span className="selected-label">Build your position</span>
               <strong className="builder-token">
-                {opportunity.tokenSymbol}
-                <span className="builder-token-sep"> · </span>
-                {isDataLoading
-                  ? <span className="builder-apy-shimmer" aria-hidden="true" />
-                  : `${apyPercent.toFixed(2)}% APY`
-                }
+                Tokenized-asset lending
               </strong>
-              <span className="builder-strategy">{opportunity.strategyName}</span>
+              <span className="builder-strategy">Deposit tokenized assets as collateral and borrow stablecoins against them with automated risk controls.</span>
             </div>
+
+            <section aria-label="Eligible collateral" className="eligible-collateral">
+              <div className="eligible-collateral-heading">
+                <span>Eligible collateral</span>
+                <span>24h volume</span>
+              </div>
+              <ul>
+                {ELIGIBLE_COLLATERAL.map(asset => (
+                  <li key={asset.ticker}>
+                    <div>
+                      <strong>{asset.ticker}</strong>
+                      <span>{asset.name} · {asset.category}</span>
+                    </div>
+                    <span>{asset.formattedVolume}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
 
             {/* Deposit input */}
             <div className={`deposit-section${isDataLoading ? ' is-loading' : ''}`}>
-              <label className="deposit-label" htmlFor="deposit-amount">Deposit amount</label>
+              <label className="deposit-label" htmlFor="deposit-amount">Collateral amount</label>
               <input
                 id="deposit-amount"
-                aria-label="Deposit amount"
+                aria-label="Collateral amount"
                 className="deposit-input"
                 inputMode="decimal"
                 placeholder={isDataLoading ? '—' : '0.00'}
