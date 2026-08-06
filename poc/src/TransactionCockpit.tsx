@@ -420,43 +420,49 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
 
       <main aria-labelledby={pageHeadingId} className={`cockpit cockpit--variant-${headerVariant} cockpit--topbar-${topbarVariant}`}>
         <header aria-label={topbarVariant === 'identity' ? headerLabel : topbarLabel} className="cockpit-header">
-          <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
-            {opportunities.map((opp, index) => (
-              <button
-                aria-controls={strategyPanelId}
-                aria-selected={opp.id === opportunity.id}
-                id={`${strategyTabListId}-tab-${index}`}
-                key={opp.id}
-                role="tab"
-                className={`strategy-tab ${chainTone(opp.chainName)} ${opp.id === opportunity.id ? 'active' : ''}`}
-                onClick={() => onSelectOpportunity?.(opp)}
-                onKeyDown={event => handleStrategyKeyDown(event, index)}
-                ref={element => {
-                  strategyTabRefs.current[index] = element
-                }}
-                tabIndex={opp.id === opportunity.id ? 0 : -1}
-                type="button"
-              >
-                <TokenIcon symbol={opp.tokenSymbol} />
-                <span>{opp.tokenSymbol}</span>
-                {opp.apyPercent !== undefined
-                  ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
-                  : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
-                }
-              </button>
-            ))}
-          </div>
-
-          <nav aria-label="Institutional Credit" className="product-nav">
+          <div aria-label="Institutional Credit" className="brand-row">
             <span className="brand-mark" aria-hidden="true">0x</span>
-            <span className="brand-name">Institutional Credit</span>
-          </nav>
+          </div>
 
           <div className="header-context" aria-hidden="true">
             {topbarVariant === 'identity' && <span>Yield strategies</span>}
             {topbarVariant === 'shelf' && <span>Choose a strategy</span>}
             {topbarVariant === 'switchboard' && <span>Automated ETH yield</span>}
             {topbarVariant === 'portfolio' && <span>Portfolio allocation</span>}
+          </div>
+
+          <div className="header-right-cluster">
+            <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
+              {opportunities.map((opp, index) => (
+                <button
+                  aria-controls={strategyPanelId}
+                  aria-selected={opp.id === opportunity.id}
+                  id={`${strategyTabListId}-tab-${index}`}
+                  key={opp.id}
+                  role="tab"
+                  className={`strategy-tab ${chainTone(opp.chainName)} ${opp.id === opportunity.id ? 'active' : ''}`}
+                  onClick={() => onSelectOpportunity?.(opp)}
+                  onKeyDown={event => handleStrategyKeyDown(event, index)}
+                  ref={element => {
+                    strategyTabRefs.current[index] = element
+                  }}
+                  tabIndex={opp.id === opportunity.id ? 0 : -1}
+                  type="button"
+                >
+                  <TokenIcon symbol={opp.tokenSymbol} />
+                  <span>{opp.tokenSymbol}</span>
+                  {opp.apyPercent !== undefined
+                    ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
+                    : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
+                  }
+                </button>
+              ))}
+
+              <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
+                Institutional Credit
+                <span className="advisor-nav-tag">Early access</span>
+              </a>
+            </div>
           </div>
 
         </header>

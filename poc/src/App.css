@@ -1369,7 +1369,7 @@ button {
 /* Header */
 .cockpit-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   min-height: 52px;
@@ -1378,20 +1378,14 @@ button {
   background: var(--paper);
 }
 
-.product-nav {
-  display: flex;
-  align-items: center;
+.cockpit-header .brand-row {
   gap: 8px;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
-.product-nav .brand-name {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.product-nav .brand-mark {
+.cockpit-header .brand-mark {
   width: 36px;
   height: 36px;
 }
@@ -1408,11 +1402,30 @@ button {
   text-transform: uppercase;
 }
 
+/* Right-side header cluster: strategy tabs (incl. advisor tab) */
+.header-right-cluster {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 /* Strategy tabs */
 .strategy-tabs {
   display: flex;
   gap: 6px;
   min-width: 0;
+}
+
+.advisor-nav-tag {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: var(--button-radius);
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .strategy-tab {
@@ -1455,6 +1468,12 @@ button {
 .strategy-tab .token-icon {
   width: 18px;
   height: 18px;
+}
+
+.strategy-tab--advisor {
+  text-decoration: none;
+  cursor: pointer;
+  color: inherit;
 }
 
 .tab-apy {
@@ -1739,7 +1758,7 @@ button {
 
 .cockpit--topbar-shelf .cockpit-header {
   background: var(--canvas);
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr);
 }
 
 .cockpit--topbar-shelf .brand-name,
@@ -2339,14 +2358,19 @@ button {
     font-size: 0.82rem;
   }
 
-  .product-nav .brand-mark {
+  .cockpit-header .brand-mark {
     width: 28px;
     height: 28px;
     font-size: 0.68rem;
   }
 
-  .strategy-tabs {
+  .header-right-cluster {
     grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .strategy-tabs {
     flex-wrap: wrap;
   }
 
@@ -2392,9 +2416,13 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .strategy-tabs {
+  .header-right-cluster {
     grid-column: 1;
     grid-row: 2;
+    width: 100%;
+  }
+
+  .strategy-tabs {
     flex-wrap: nowrap;
     width: 100%;
   }

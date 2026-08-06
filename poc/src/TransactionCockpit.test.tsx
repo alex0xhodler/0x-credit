@@ -73,7 +73,8 @@ describe('TransactionCockpit — cockpit layout', () => {
     render(<TransactionCockpit {...baseProps} />)
 
     const strategies = screen.getByRole('tablist', { name: /strategy/i })
-    const navigation = screen.getByRole('navigation', { name: /institutional credit/i })
+    const navigation = screen.getByRole('link', { name: /institutional credit/i })
+    expect(navigation).toHaveAttribute('href', '?view=advisor')
     expect(strategies.compareDocumentPosition(navigation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 

@@ -1,0 +1,1693 @@
+/* ==========================================================================
+   Tokens — forked from the 0x.credit cockpit design language (App.css /
+   TransactionCockpit.tsx), scoped under .advisor-app per red-team B6. This
+   file never reuses cockpit class names; only the token values (colors,
+   radii, shadow) are lifted.
+   ========================================================================== */
+
+.advisor-app {
+  --paper: #FFFFFF;
+  --canvas: #f2f2f3;
+  --ink: #000000;
+  --muted: rgb(100, 100, 100);
+  --line: rgba(0, 0, 0, 0.1);
+  --line-strong: rgba(0, 0, 0, 0.2);
+  --primary: #E42B0C;
+  --ember: #E42B0C;
+  --good: #2e7d32;
+  --good-bg: rgba(46, 125, 50, 0.1);
+  --bad: #E42B0C;
+  --bad-bg: rgba(228, 43, 12, 0.08);
+  --surface-radius: 24px;
+  --button-radius: 999px;
+  --small-radius: 4px;
+  --card-shadow: 0 1px 1px #0000001a;
+
+  min-height: 100vh;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  position: relative;
+  padding: clamp(16px, 4vw, 40px) 16px 64px;
+  box-sizing: border-box;
+}
+
+/* Neutralize App.css global paints/bare-element selectors so they never
+   bleed into the advisor's light canvas (red-team B6). */
+.advisor-app::before,
+.advisor-app::after {
+  content: none !important;
+  display: none !important;
+}
+
+.advisor-app button {
+  border: 0;
+  font: inherit;
+}
+
+.advisor-app input {
+  font: inherit;
+}
+
+.advisor-app h1,
+.advisor-app h2,
+.advisor-app h3 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.advisor-app * {
+  box-sizing: border-box;
+}
+
+.advisor-app :is(input, button) {
+  font-family: inherit;
+  color: inherit;
+}
+
+.advisor-app :is(button, input, [role='meter']):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.advisor-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Buttons */
+
+.advisor-app .advisor-btn {
+  padding: 10px 20px;
+  border-radius: var(--button-radius);
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.advisor-app .advisor-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.advisor-app .advisor-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.advisor-app .advisor-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--muted);
+}
+
+.advisor-app .advisor-btn--ghost:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.advisor-link-button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 160ms ease;
+}
+
+.advisor-link-button:hover {
+  color: var(--ink);
+}
+
+/* Large pill primary CTA, lifted from TransactionCockpit's .primary-action. */
+.advisor-app .advisor-cta {
+  min-height: 48px;
+  width: 100%;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: var(--button-radius);
+  background: var(--primary);
+  color: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Manrope', system-ui, sans-serif;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.advisor-app .advisor-cta:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.advisor-app .advisor-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.advisor-cta-reason {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ember);
+}
+
+.advisor-back-btn {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* ==========================================================================
+   Wizard shell — the single white rounded card on the grey canvas, top bar,
+   and two-pane body, lifted from the cockpit shell.
+   ========================================================================== */
+
+.advisor-wizard {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.advisor-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.advisor-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.advisor-brand-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--primary);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.advisor-topbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line-strong);
+}
+
+.advisor-topbar-label {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.advisor-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.advisor-pane-content {
+  min-width: 0;
+  padding: clamp(20px, 3vw, 32px);
+}
+
+.advisor-pane-rail {
+  min-width: 0;
+  padding: clamp(20px, 3vw, 32px);
+}
+
+@media (min-width: 861px) {
+  .advisor-body {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .advisor-pane-content {
+    flex: 1.6;
+    border-right: 1px solid var(--line);
+  }
+
+  .advisor-pane-rail {
+    flex: 1;
+  }
+}
+
+.advisor-pane-content h2 {
+  font-size: clamp(24px, 3vw, 32px);
+  margin: 0 0 8px;
+}
+
+.advisor-explainer {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+.advisor-overline {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--primary);
+  margin: 0 0 10px;
+}
+
+.advisor-notice {
+  background: var(--canvas);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--small-radius);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 20px;
+}
+
+.advisor-field {
+  display: block;
+  margin-bottom: 20px;
+}
+
+/* ==========================================================================
+   Stock catalog (screen 1)
+   ========================================================================== */
+
+.advisor-catalog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.advisor-stock-row {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.advisor-stock-row.is-selected {
+  border-color: var(--ink);
+  box-shadow: var(--card-shadow);
+}
+
+.advisor-stock-row-main {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1.4fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.advisor-stock-check {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--small-radius);
+  position: relative;
+}
+
+.advisor-stock-row-main:has(input:checked) .advisor-stock-check {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.advisor-stock-row-main:has(input:checked) .advisor-stock-check::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 4px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.advisor-stock-id {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 15px;
+}
+
+.advisor-stock-id strong {
+  font-weight: 700;
+}
+
+.advisor-stock-name {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advisor-tier-chip {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--button-radius);
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.advisor-stock-meta {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.advisor-deposit-block {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--line);
+  margin-top: 2px;
+  padding-top: 14px;
+}
+
+.advisor-deposit-field {
+  display: block;
+}
+
+.advisor-deposit-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+/* The large rounded deposit/borrow field, lifted from the cockpit's
+   .amount-field / .deposit-input. */
+.advisor-app .advisor-deposit-input {
+  width: 100%;
+  height: 52px;
+  padding: 0 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--button-radius);
+  outline: none;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  font-weight: 500;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.advisor-app .advisor-deposit-input:focus {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+
+.advisor-deposit-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.advisor-app .advisor-deposit-preset {
+  padding: 6px 14px;
+  border-radius: var(--button-radius);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms, color 140ms;
+}
+
+.advisor-app .advisor-deposit-preset:hover {
+  background: var(--canvas);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.advisor-route-strip {
+  margin: 4px 0 24px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.advisor-skip-link {
+  text-align: center;
+  margin: 8px 0 0;
+}
+
+/* ==========================================================================
+   Right rail — position summary, borrow, risk readout, exec steps
+   ========================================================================== */
+
+.advisor-position-summary {
+  margin: 0 0 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.advisor-position-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.advisor-position-line dt {
+  color: var(--muted);
+}
+
+.advisor-position-line dd {
+  margin: 0;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.advisor-position-line--total dt,
+.advisor-position-line--total dd {
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.advisor-borrow-anchor {
+  margin-bottom: 14px;
+}
+
+.advisor-risk-presets {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.advisor-app .advisor-preset-pill {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: var(--button-radius);
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms, color 140ms;
+}
+
+.advisor-app .advisor-preset-pill:hover:not(:disabled) {
+  background: var(--canvas);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.advisor-app .advisor-preset-pill:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  color: var(--muted);
+}
+
+.advisor-borrow-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.advisor-borrow-toggle-mark {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--small-radius);
+  position: relative;
+}
+
+.advisor-borrow-toggle-row:has(input:checked) .advisor-borrow-toggle-mark {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.advisor-borrow-toggle-row:has(input:checked) .advisor-borrow-toggle-mark::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.advisor-borrow-extra {
+  padding-bottom: 14px;
+}
+
+.advisor-max-hint {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.advisor-peg-badge {
+  font-size: 11px;
+  color: var(--good);
+  margin-left: auto;
+}
+
+.advisor-risk-readout {
+  padding: 16px 0 6px;
+  border-top: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+
+.advisor-hf-readout-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 40px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  margin: 2px 0 6px;
+}
+
+.advisor-zone-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.advisor-zone-note.is-bad {
+  color: var(--ember);
+  font-weight: 600;
+}
+
+.advisor-capacity-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.advisor-error-list {
+  margin: 10px 0 0;
+  padding-left: 16px;
+  color: var(--ember);
+  font-size: 13px;
+}
+
+/* ==========================================================================
+   Execution steps strip — numbered 1 → 2 → ✓ with connector lines, lifted
+   from TransactionCockpit's .step-track.
+   ========================================================================== */
+
+.advisor-exec-steps {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.advisor-exec-node-wrap {
+  display: contents;
+}
+
+.advisor-exec-connector {
+  flex: 1;
+  height: 2px;
+  margin-top: 14px;
+  background: var(--line);
+  transition: background 300ms;
+}
+
+.advisor-exec-connector.is-done {
+  background: var(--good);
+}
+
+.advisor-exec-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.advisor-exec-node-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  transition: border-color 300ms, background 300ms, color 300ms;
+}
+
+.advisor-exec-node--active .advisor-exec-node-circle {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.advisor-exec-node--done .advisor-exec-node-circle {
+  border-color: var(--good);
+  background: var(--good);
+  color: #fff;
+}
+
+.advisor-exec-node-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.advisor-exec-node--active .advisor-exec-node-label {
+  color: var(--primary);
+}
+
+.advisor-exec-node--done .advisor-exec-node-label {
+  color: var(--good);
+}
+
+/* ==========================================================================
+   Screen 2 — mandate (mode cards, permission rows, intervention slider)
+   ========================================================================== */
+
+.advisor-mode-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.advisor-mode-card {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 160ms ease;
+}
+
+.advisor-mode-card.is-selected {
+  border-color: var(--ink);
+  box-shadow: var(--card-shadow);
+}
+
+.advisor-mode-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.advisor-recommended-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border-radius: var(--button-radius);
+  padding: 2px 8px;
+}
+
+.advisor-mode-desc {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.advisor-permission-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+}
+
+.advisor-permission-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.advisor-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: var(--button-radius);
+  background: var(--line-strong);
+  border: 1px solid var(--line);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 160ms ease;
+}
+
+.advisor-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.advisor-permission-row input:checked + .advisor-switch {
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.advisor-permission-row input:checked + .advisor-switch::after {
+  transform: translateX(16px);
+}
+
+.advisor-permission-label {
+  display: block;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.advisor-permission-desc {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.advisor-app input[type='range'] {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.advisor-intervention-value {
+  display: inline-block;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.advisor-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Screen 3 — review & activate
+   ========================================================================== */
+
+.advisor-review-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px 32px;
+  margin: 0 0 24px;
+}
+
+.advisor-review-group .advisor-overline {
+  margin-bottom: 8px;
+}
+
+.advisor-review-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 0;
+}
+
+.advisor-review-row dt {
+  color: var(--muted);
+}
+
+.advisor-review-row dd {
+  margin: 0;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.advisor-agent-preview {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.advisor-preview-card {
+  position: relative;
+  background: var(--canvas);
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  padding: 16px;
+  padding-left: 32px;
+  margin-bottom: 8px;
+}
+
+.advisor-pulse-dot {
+  position: absolute;
+  top: 18px;
+  left: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: advisor-pulse 2s ease-in-out infinite;
+}
+
+@keyframes advisor-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(228, 43, 12, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(228, 43, 12, 0);
+  }
+}
+
+.advisor-preview-rationale {
+  font-size: 14px;
+  margin: 0 0 8px;
+  color: var(--ink);
+}
+
+.advisor-preview-signals {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.advisor-hf-delta-pill {
+  display: inline-block;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--button-radius);
+  padding: 2px 10px;
+}
+
+.advisor-hf-delta-pill.is-up {
+  color: var(--good);
+  background: var(--good-bg);
+}
+
+.advisor-hf-delta-pill.is-down {
+  color: var(--bad);
+  background: var(--bad-bg);
+}
+
+.advisor-preview-empty {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.advisor-preview-caption {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.advisor-watch-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Early access gate — lead-capture screen shown between activation and the
+   dashboard, lifted from the Review screen's summary and form conventions.
+   ========================================================================== */
+
+.advisor-agent-summary {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 0 0 24px;
+}
+
+.advisor-agent-summary .advisor-overline {
+  margin-bottom: 10px;
+}
+
+.advisor-early-access-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.advisor-early-access-error {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--ember);
+}
+
+.advisor-early-access-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.advisor-early-access-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.advisor-early-access-check-mark {
+  color: var(--good);
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   Dashboard — restyled into the cockpit language; structure, testids, and
+   behavior are unchanged from Pass B.
+   ========================================================================== */
+
+.advisor-dashboard {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--surface-radius);
+  box-shadow: var(--card-shadow);
+  padding: clamp(16px, 3vw, 28px);
+}
+
+/* Header */
+
+.advisor-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.advisor-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.advisor-app .advisor-brand {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--ink);
+  font-family: 'Manrope', system-ui, sans-serif;
+}
+
+.advisor-brand-sub {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.advisor-dash-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advisor-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--button-radius);
+  padding: 6px 14px;
+}
+
+.advisor-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  animation: advisor-dash-pulse 2s ease-in-out infinite;
+}
+
+@keyframes advisor-dash-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(46, 125, 50, 0);
+  }
+}
+
+/* Black pill toggle, lifted from the cockpit's top-right pill group. */
+.advisor-app .advisor-dash-toggle {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--button-radius);
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.advisor-app .advisor-dash-toggle:hover {
+  background: var(--canvas);
+}
+
+.advisor-app .advisor-dash-toggle.is-on {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Reflexive banner */
+
+.advisor-reflexive-banner {
+  background: var(--bad-bg);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ember);
+  border-radius: var(--small-radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.advisor-reflexive-line {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--ink);
+}
+
+.advisor-reflexive-line + .advisor-reflexive-line {
+  margin-top: 6px;
+}
+
+/* Metrics row */
+
+.advisor-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.advisor-stat-tile {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+.advisor-stat-tile .advisor-overline {
+  margin-bottom: 4px;
+}
+
+.advisor-stat-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.advisor-stat-value--good {
+  color: var(--good);
+}
+
+.advisor-stat-value--warn {
+  color: var(--ember);
+}
+
+.advisor-stat-value--bad {
+  color: var(--ember);
+}
+
+.advisor-stat-subline {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.advisor-stat-subline--good {
+  color: var(--good);
+}
+
+.advisor-stat-subline--warn,
+.advisor-stat-subline--bad {
+  color: var(--ember);
+}
+
+.advisor-progress-strip {
+  display: block;
+  height: 4px;
+  border-radius: var(--button-radius);
+  background: var(--canvas);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.advisor-progress-fill {
+  display: block;
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.advisor-progress-fill--good {
+  background: var(--good);
+}
+
+.advisor-progress-fill--warn,
+.advisor-progress-fill--bad {
+  background: var(--ember);
+}
+
+.advisor-mini-meter {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: var(--button-radius);
+  margin-top: 8px;
+  background: linear-gradient(
+    to right,
+    var(--ember) 0%,
+    var(--ember) 11.76%,
+    #b45309 11.76%,
+    #b45309 23.53%,
+    var(--good) 23.53%,
+    var(--good) 100%
+  );
+}
+
+.advisor-mini-meter-thumb {
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--paper);
+  transform: translate(-50%, -50%);
+}
+
+/* Main grid */
+
+.advisor-main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* Agent feed */
+
+.advisor-feed-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.advisor-feed-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.advisor-feed-head .advisor-overline {
+  margin-bottom: 0;
+}
+
+.advisor-count-pill {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--button-radius);
+  padding: 1px 9px;
+}
+
+.advisor-feed-empty {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  padding: 32px 0;
+  margin: 0;
+}
+
+.advisor-proposal-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.advisor-proposal-group .advisor-overline {
+  margin-bottom: 10px;
+}
+
+.advisor-proposal-group .advisor-proposal-card {
+  margin-bottom: 8px;
+}
+
+.advisor-proposal-group .advisor-proposal-card:last-child {
+  margin-bottom: 0;
+}
+
+.advisor-proposal-card {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.advisor-proposal-card:last-child {
+  margin-bottom: 0;
+}
+
+.advisor-proposal-card--high {
+  border-left-color: var(--ember);
+}
+
+.advisor-proposal-card--medium {
+  border-left-color: #b45309;
+}
+
+.advisor-proposal-card--low {
+  border-left-color: var(--line-strong);
+}
+
+.advisor-proposal-card.is-nested {
+  background: var(--canvas);
+}
+
+.advisor-proposal-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.advisor-urgency-pill {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: var(--button-radius);
+  border: 1px solid currentColor;
+  flex-shrink: 0;
+}
+
+.advisor-urgency-pill--high {
+  color: var(--ember);
+}
+
+.advisor-urgency-pill--medium {
+  color: #b45309;
+}
+
+.advisor-urgency-pill--low {
+  color: var(--muted);
+}
+
+.advisor-proposal-title {
+  flex: 1;
+}
+
+.advisor-chevron {
+  color: var(--muted);
+  transition: transform 160ms ease;
+  flex-shrink: 0;
+}
+
+.advisor-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.advisor-proposal-body {
+  padding: 0 16px 16px;
+}
+
+.advisor-proposal-rationale {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0 0 10px;
+}
+
+.advisor-signal-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.advisor-signal-chip {
+  font-size: 12px;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--button-radius);
+  padding: 3px 10px;
+}
+
+.advisor-weight-edit {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.advisor-weight-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.advisor-weight-edit-row input {
+  width: 72px;
+  padding: 6px 10px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--small-radius);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.advisor-proposal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.advisor-proposal-projection {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.advisor-proposal-projection strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.advisor-delta-up {
+  color: var(--good);
+}
+
+.advisor-delta-down {
+  color: var(--ember);
+}
+
+.advisor-proposal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.advisor-app .advisor-feed-panel .advisor-btn--ghost {
+  padding: 8px 16px;
+}
+
+/* Right rail */
+
+.advisor-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.advisor-rail-panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.advisor-rail-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.advisor-rail-panel-head .advisor-overline {
+  margin-bottom: 0;
+}
+
+.advisor-rail-panel-value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* Basket rows */
+
+.advisor-basket-row {
+  display: grid;
+  grid-template-columns: 8px 44px 1fr 36px 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.advisor-basket-symbol {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.advisor-basket-bar {
+  position: relative;
+  height: 6px;
+  border-radius: var(--button-radius);
+  background: var(--canvas);
+  overflow: visible;
+}
+
+.advisor-basket-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--button-radius);
+}
+
+.advisor-basket-bar-tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 10px;
+  background: var(--ink);
+  transform: translate(-50%, -50%);
+}
+
+.advisor-basket-current {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.advisor-basket-drift {
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.advisor-basket-drift.is-breached {
+  color: var(--ember);
+}
+
+/* Borrow rows */
+
+.advisor-borrow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.advisor-borrow-row:last-child {
+  border-bottom: none;
+}
+
+.advisor-borrow-coin {
+  font-weight: 700;
+  min-width: 44px;
+}
+
+.advisor-borrow-amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.advisor-tier-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-left: auto;
+}
+
+.advisor-tier-dot--1 {
+  background: var(--good);
+}
+
+.advisor-tier-dot--2 {
+  background: #b45309;
+}
+
+.advisor-tier-dot--3 {
+  background: var(--ember);
+}
+
+.advisor-borrow-tier {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.advisor-borrow-apr {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Signals */
+
+.advisor-signal-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 0;
+}
+
+.advisor-signal-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex-shrink: 0;
+}
+
+.advisor-signal-dot--risk_off {
+  background: var(--ember);
+}
+
+.advisor-signal-dot--risk_on {
+  background: var(--good);
+}
+
+.advisor-signal-dot--neutral {
+  background: var(--muted);
+}
+
+.advisor-signal-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.advisor-signal-meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Mandate */
+
+.advisor-mandate-mode {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--ink);
+}
+
+.advisor-mandate-threshold {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.advisor-mandate-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.advisor-mandate-pill {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--button-radius);
+  padding: 3px 9px;
+}
+
+@media (max-width: 900px) {
+  .advisor-metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .advisor-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
