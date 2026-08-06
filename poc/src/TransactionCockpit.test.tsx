@@ -69,6 +69,14 @@ describe('TransactionCockpit — cockpit layout', () => {
     expect(screen.getByRole('tab', { name: /weth/i })).toBeInTheDocument()
   })
 
+  it('places Institutional Credit navigation after the strategy tabs', () => {
+    render(<TransactionCockpit {...baseProps} />)
+
+    const strategies = screen.getByRole('tablist', { name: /strategy/i })
+    const navigation = screen.getByRole('navigation', { name: /institutional credit/i })
+    expect(strategies.compareDocumentPosition(navigation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('marks the current opportunity tab as selected', () => {
     render(<TransactionCockpit {...baseProps} />)
     expect(screen.getByRole('tab', { name: /wsteth/i })).toHaveAttribute('aria-selected', 'true')

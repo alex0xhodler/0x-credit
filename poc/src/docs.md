@@ -40,7 +40,7 @@ The component has two render branches:
 cockpit-wrap
 ├── h1.sr-only           (Automated yield strategies)
 ├── cockpit (main card)
-│   ├── cockpit-header   (brand + strategy-tabs)
+│   ├── cockpit-header   (strategy-tabs → Institutional Credit navigation → contextual label)
 │   └── cockpit-body
 │       ├── cockpit-chart-pane
 │       │   ├── route-summary (selected-route provenance, when supplied)
@@ -58,6 +58,7 @@ cockpit-wrap
 - The comparison period control is a `role="radiogroup"` with 1M, 6M, and 1Y choices; the default is 6M. The chart baseline follows the entered deposit (or the minimum deposit fallback) after a 300 ms debounce, preventing a redraw for every keystroke.
 - Benchmark fetching is best-effort and abortable. When it is unavailable, the chart still renders the selected route and the flat WETH comparison; unavailable benchmark series are omitted.
 - Strategy selector is a persistent `role="tablist"` tab bar in the header. Switching tabs calls `onSelectOpportunity`, which in `App.tsx` resets execution error, sets `forceNewAccount`, and updates `amount` to a chain-appropriate default.
+- The cockpit header keeps the interactive strategy `tablist` first, then renders a semantic [`<nav aria-label="Institutional Credit">`](TransactionCockpit.tsx) containing the `0x` mark and product name; the variant-specific contextual label follows. [`@/poc/src/App.css`](App.css) gives the tab list the flexible grid column and preserves the navigation/context columns as intrinsic-width items, while the mobile header lets the tab list span the header row.
 - When present, `OpportunityView.routeSteps` is rendered as a compact route summary beside the projection rather than as global partner branding; every displayed provider is paired with its operational role.
 - The right-hand builder presents tokenized-asset lending copy and maps its static eligible-collateral records to ticker, name/category, and pre-formatted 24-hour volume rows. The list has no callbacks or controls; changing the `Collateral amount` input still calls the `onAmountChange` prop and therefore updates only the amount state held by [`@/poc/src/App.tsx`](App.tsx).
 

@@ -1369,7 +1369,7 @@ button {
 /* Header */
 .cockpit-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   min-height: 52px;
@@ -1378,14 +1378,20 @@ button {
   background: var(--paper);
 }
 
-.cockpit-header .brand-row {
+.product-nav {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  font-size: 1rem;
-  letter-spacing: 0.5px;
   white-space: nowrap;
 }
 
-.cockpit-header .brand-mark {
+.product-nav .brand-name {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.product-nav .brand-mark {
   width: 36px;
   height: 36px;
 }
@@ -1733,7 +1739,7 @@ button {
 
 .cockpit--topbar-shelf .cockpit-header {
   background: var(--canvas);
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .cockpit--topbar-shelf .brand-name,
@@ -2333,7 +2339,7 @@ button {
     font-size: 0.82rem;
   }
 
-  .cockpit-header .brand-mark {
+  .product-nav .brand-mark {
     width: 28px;
     height: 28px;
     font-size: 0.68rem;

@@ -420,17 +420,6 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
 
       <main aria-labelledby={pageHeadingId} className={`cockpit cockpit--variant-${headerVariant} cockpit--topbar-${topbarVariant}`}>
         <header aria-label={topbarVariant === 'identity' ? headerLabel : topbarLabel} className="cockpit-header">
-          <div aria-label="Institutional Credit" className="brand-row">
-            <span className="brand-mark" aria-hidden="true">0x</span>
-          </div>
-
-          <div className="header-context" aria-hidden="true">
-            {topbarVariant === 'identity' && <span>Yield strategies</span>}
-            {topbarVariant === 'shelf' && <span>Choose a strategy</span>}
-            {topbarVariant === 'switchboard' && <span>Automated ETH yield</span>}
-            {topbarVariant === 'portfolio' && <span>Portfolio allocation</span>}
-          </div>
-
           <div role="tablist" aria-label="Strategy" aria-orientation="horizontal" className="strategy-tabs">
             {opportunities.map((opp, index) => (
               <button
@@ -456,6 +445,18 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 }
               </button>
             ))}
+          </div>
+
+          <nav aria-label="Institutional Credit" className="product-nav">
+            <span className="brand-mark" aria-hidden="true">0x</span>
+            <span className="brand-name">Institutional Credit</span>
+          </nav>
+
+          <div className="header-context" aria-hidden="true">
+            {topbarVariant === 'identity' && <span>Yield strategies</span>}
+            {topbarVariant === 'shelf' && <span>Choose a strategy</span>}
+            {topbarVariant === 'switchboard' && <span>Automated ETH yield</span>}
+            {topbarVariant === 'portfolio' && <span>Portfolio allocation</span>}
           </div>
 
         </header>
