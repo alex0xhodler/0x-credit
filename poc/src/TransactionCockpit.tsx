@@ -588,9 +588,9 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 <ul>
                   <li>You deposit <strong>{parsedAmount.toFixed(2)} {opportunity.tokenSymbol}</strong> as collateral.</li>
                   {borrowedEstimate > 0 && (
-                    <li>KPK on Gearbox lends you about <strong>{formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
+                    <li>KPK lends you about <strong>{formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify your position.</li>
                   )}
-                  <li>APY and health factor can move after opening.</li>
+                  <li>Your earnings rate and auto-protection threshold may adjust as market conditions change.</li>
                 </ul>
               </div>
             )}
