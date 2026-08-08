@@ -158,7 +158,7 @@ export class TrustlineClient {
     evidenceHash: string
     responsePayload: Record<string, unknown>
   }> {
-    const isTest = typeof process !== 'undefined' && process.env?.NODE_ENV === 'test'
+    const isTest = import.meta.env?.MODE === 'test' || (typeof globalThis !== 'undefined' && (globalThis as unknown as { process?: { env?: { NODE_ENV?: string } } }).process?.env?.NODE_ENV === 'test')
     if (isTest) {
       return {
         success: true,
