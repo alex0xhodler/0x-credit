@@ -939,7 +939,7 @@ export function Onboarding({ initialConfig, appliedChangesNotice = 0, onActivate
             0x
           </span>
           <span className="advisor-topbar-divider" aria-hidden="true" />
-          <span className="advisor-topbar-label">Robo-Advisor</span>
+          <span className="advisor-topbar-label">Institutional Credit</span>
         </header>
 
         <div className="advisor-body">

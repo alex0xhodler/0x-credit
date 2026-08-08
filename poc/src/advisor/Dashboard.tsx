@@ -390,7 +390,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
             0x
           </span>
           <span className="advisor-brand">0x.credit</span>
-          <span className="advisor-brand-sub">Robo-Advisor</span>
+          <span className="advisor-brand-sub">Institutional Credit</span>
         </div>
         <div className="advisor-dash-header-right">
           <span className="advisor-status-pill">

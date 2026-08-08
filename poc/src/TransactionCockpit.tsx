@@ -439,7 +439,7 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
               ))}
 
               <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
-                Robo-Advisor
+                Institutional Credit
                 <span className="advisor-nav-tag">Early access</span>
               </a>
             </div>
