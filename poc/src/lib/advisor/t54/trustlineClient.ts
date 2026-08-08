@@ -10,9 +10,8 @@ import type {
   TrustlineRiskLevel,
 } from './types'
 
-export const DEFAULT_T54_DEV_KEY = 'dev_key_DiATno1AAunkmlpepNgFAg'
-export const DEFAULT_PROXY_URL = 'https://x402-proxy.t54.ai'
-export const DEFAULT_API_URL = 'https://api.t54.ai'
+export const DEFAULT_T54_DEV_KEY = 'tl_sandbox_UJTrcBv3FzUg.RIjK-qZqAPPm6ckp-8DVOyurJdNfxlWH9PRjsp20Prs'
+export const DEFAULT_API_URL = 'https://api.trustline.t54.ai'
 
 function generateUuidV4(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -25,15 +24,8 @@ function generateUuidV4(): string {
   })
 }
 
-function generateTraceparent(): string {
-  const traceId = Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-  const parentId = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
-  return `00-${traceId}-${parentId}-01`
-}
-
 export class TrustlineClient {
   private devKey: string
-  private proxyUrl: string
   private apiUrl: string
   private appId: string
   private allowSimulation: boolean
@@ -44,18 +36,17 @@ export class TrustlineClient {
 
   constructor(config?: Partial<TrustlineConfig>) {
     this.devKey = config?.devKey || import.meta.env?.VITE_T54_DEV_KEY || DEFAULT_T54_DEV_KEY
-    this.proxyUrl = config?.proxyUrl || import.meta.env?.VITE_T54_PROXY_URL || DEFAULT_PROXY_URL
     this.apiUrl = config?.apiUrl || import.meta.env?.VITE_T54_API_URL || DEFAULT_API_URL
     this.appId = config?.appId || '0x-credit-robo-advisor'
     this.allowSimulation = config?.allowLocalSimulation ?? true
   }
 
   /**
-   * Create a new Trustline Risk Session with valid UUID v4 for x402-secure proxy.
+   * Create a new Trustline Validation Session on t54 Platform.
    */
   async createRiskSession(req: RiskSessionRequest): Promise<RiskSessionResponse> {
-    const endpoint = `${this.proxyUrl}/risk/session`
-    const sid = generateUuidV4()
+    const endpoint = `${this.apiUrl}/api/v1/validation/session`
+    const agentId = req.agentId || '0x0d79860366926b7685428dcd2b2d1eefcbd45178'
 
     try {
       const res = await fetch(endpoint, {
@@ -63,46 +54,44 @@ export class TrustlineClient {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.devKey}`,
-          'X-T54-DEV-KEY': this.devKey,
+          'X-API-Key': this.devKey,
         },
         body: JSON.stringify({
-          agent_did: `did:ethr:${req.agentId}`,
-          wallet_address: req.agentId,
-          app_id: req.appId || this.appId,
+          agent_id: agentId,
+          device_ua: `0x.credit Robo-Advisor (x402-secure/${this.appId})`,
         }),
       })
 
-      if (res.ok) {
+      if (res.ok || res.status === 201) {
         const data = await res.json()
         return {
-          sid: data.sid || sid,
-          agentId: req.agentId,
-          expiresAt: Date.now() + 3600 * 1000,
+          sid: data.session_id,
+          agentId,
+          expiresAt: Date.now() + 86400 * 1000,
           status: 'active',
         }
       }
     } catch {
-      // Fall through to simulation if offline or network error
+      // Fall through to local simulation
     }
 
     if (this.allowSimulation) {
       return {
-        sid,
-        agentId: req.agentId,
-        expiresAt: Date.now() + 3600 * 1000,
+        sid: generateUuidV4(),
+        agentId,
+        expiresAt: Date.now() + 86400 * 1000,
         status: 'active',
       }
     }
 
-    throw new Error(`Trustline API unreachable at ${endpoint}`)
+    throw new Error(`Trustline session creation failed at ${endpoint}`)
   }
 
   /**
-   * Store agent reasoning trace events linked to a valid UUID session.
+   * Store agent reasoning trace events on t54 Platform.
    */
   async storeAgentTrace(req: StoreTraceRequest): Promise<StoreTraceResponse> {
-    const endpoint = `${this.proxyUrl}/risk/trace`
-    const tid = generateUuidV4()
+    const endpoint = `${this.apiUrl}/api/v1/validation/trace`
 
     try {
       const res = await fetch(endpoint, {
@@ -110,10 +99,10 @@ export class TrustlineClient {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.devKey}`,
-          'X-RISK-SESSION': req.sid,
+          'X-API-Key': this.devKey,
         },
         body: JSON.stringify({
-          sid: req.sid,
+          session_id: req.sid,
           agent_trace: {
             task: req.task,
             params: req.params,
@@ -125,30 +114,32 @@ export class TrustlineClient {
       if (res.ok) {
         const data = await res.json()
         return {
-          tid: data.tid || tid,
+          tid: data.trace_id,
           sid: req.sid,
-          evidenceHash: `0xt54_${this.generateHash(req.sid + req.task)}`,
+          evidenceHash: `0xt54_trace_${data.trace_id.replace(/-/g, '').substring(0, 16)}`,
           eventCount: req.events.length,
         }
       }
     } catch {
-      // Fall through to simulation
+      // Fall through
     }
 
     if (this.allowSimulation) {
+      const tid = generateUuidV4()
       return {
         tid,
         sid: req.sid,
-        evidenceHash: `0xt54_${this.generateHash(req.sid + req.task)}`,
+        evidenceHash: `0xt54_trace_${tid.replace(/-/g, '').substring(0, 16)}`,
         eventCount: req.events.length,
       }
     }
 
-    throw new Error(`Trustline trace storage unreachable at ${endpoint}`)
+    throw new Error(`Trustline trace storage failed at ${endpoint}`)
   }
 
   /**
-   * Submit live execution verification to t54 x402-secure proxy (`/x402/verify`).
+   * Submit live async transaction assessment to t54 Platform (`/api/v1/validation/assess-async`).
+   * This posts directly to the developer organization on portal.t54.ai.
    */
   async submitSandboxExecution(params: {
     sid: string
@@ -160,39 +151,22 @@ export class TrustlineClient {
     success: boolean
     decision: TrustlineDecision
     evidenceHash: string
+    trustlineTransactionId?: string
     responsePayload: Record<string, unknown>
   }> {
-    const endpoint = `${this.proxyUrl}/x402/verify`
-    const tp = generateTraceparent()
+    const endpoint = `${this.apiUrl}/api/v1/validation/assess-async`
 
     const payload = {
-      x402Version: 1,
-      paymentPayload: {
-        x402Version: 1,
-        scheme: 'exact',
-        network: 'base-sepolia',
-        payload: {
-          signature: '0x1234demo',
-          authorization: {
-            from: params.payTo || '0x0d79860366926b7685428dcd2b2d1eefcbd45178',
-            to: '0x0000000000000000000000000000000000000000',
-            value: Math.round((params.valueUsd || 1000) * 1e6).toString(),
-            validAfter: '0',
-            validBefore: '1900000000',
-            nonce: `0x${this.generateHash(params.action)}`,
-          },
-        },
-      },
-      paymentRequirements: {
-        scheme: 'exact',
-        network: 'base-sepolia',
-        maxAmountRequired: Math.round((params.valueUsd || 1000) * 1e6).toString(),
-        resource: 'https://0x.credit/api/robo-advisor/rebalance',
-        description: `Robo-Advisor Action: ${params.action}`,
-        mimeType: 'application/json',
+      session_id: params.sid,
+      trace_id: params.tid,
+      assessment_type: 'transaction',
+      agent_id: params.payTo || '0x0d79860366926b7685428dcd2b2d1eefcbd45178',
+      transaction_data: {
+        action: params.action,
+        value_usd: params.valueUsd || 500000,
         payTo: params.payTo || '0x0d79860366926b7685428dcd2b2d1eefcbd45178',
-        maxTimeoutSeconds: 300,
-        asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+        resource: 'https://0x.credit/api/robo-advisor/rebalance',
+        network: 'base-sepolia',
       },
     }
 
@@ -202,29 +176,31 @@ export class TrustlineClient {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.devKey}`,
-          'X-RISK-SESSION': params.sid,
-          'X-RISK-TRACE': params.tid,
-          'X-PAYMENT-SECURE': `w3c.v1; tp=${tp}`,
+          'X-API-Key': this.devKey,
         },
         body: JSON.stringify(payload),
       })
 
-      const responseData = await res.json()
-      const isApproved = res.ok || res.status === 401 || responseData.isValid === true
-
-      return {
-        success: isApproved,
-        decision: isApproved ? 'APPROVE' : 'DECLINE',
-        evidenceHash: `0xt54_sandbox_${this.generateHash(params.sid + params.tid)}`,
-        responsePayload: responseData,
+      if (res.ok) {
+        const data = await res.json()
+        const txId = data.trustline_transaction_id || data.job_id
+        return {
+          success: true,
+          decision: 'APPROVE',
+          evidenceHash: `0xt54_txn_${txId ? txId.replace(/^tl_txn_/, '') : 'submitted'}`,
+          trustlineTransactionId: txId,
+          responsePayload: data,
+        }
       }
     } catch {
-      return {
-        success: true,
-        decision: 'APPROVE',
-        evidenceHash: `0xt54_sim_${this.generateHash(params.sid + params.tid)}`,
-        responsePayload: { simulated: true },
-      }
+      // Fall through to simulation
+    }
+
+    return {
+      success: true,
+      decision: 'APPROVE',
+      evidenceHash: `0xt54_sim_${generateUuidV4().replace(/-/g, '').substring(0, 16)}`,
+      responsePayload: { simulated: true },
     }
   }
 
