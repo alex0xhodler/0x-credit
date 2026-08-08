@@ -16,7 +16,7 @@ export function TrustlineAuditBadge({ audit, sid, tid }: TrustlineAuditBadgeProp
     <div className="advisor-trustline-badge" data-testid="trustline-audit-badge">
       <div className="advisor-trustline-header">
         <span className="advisor-trustline-icon" aria-hidden="true">🛡️</span>
-        <span className="advisor-trustline-title">t54 Trustline Secured</span>
+        <span className="advisor-trustline-title">t54 Trustline Underwritten</span>
         {audit && (
           <span className={`advisor-trustline-pill ${riskClass}`}>
             {audit.decision} ({audit.riskLevel.toUpperCase()} RISK)
@@ -25,17 +25,43 @@ export function TrustlineAuditBadge({ audit, sid, tid }: TrustlineAuditBadgeProp
       </div>
 
       <div className="advisor-trustline-details">
+        {audit?.trustlineTransactionId ? (
+          <div className="advisor-trustline-row">
+            <span className="advisor-trustline-label">Transaction ID:</span>
+            {audit.portalUrl ? (
+              <a
+                href={audit.portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="advisor-trustline-link"
+              >
+                <code>{audit.trustlineTransactionId}</code> ↗
+              </a>
+            ) : (
+              <code className="advisor-trustline-code">{audit.trustlineTransactionId}</code>
+            )}
+          </div>
+        ) : null}
+
         <div className="advisor-trustline-row">
           <span className="advisor-trustline-label">Risk Session ID:</span>
           <code className="advisor-trustline-code">{audit?.sid || sid}</code>
         </div>
-        {audit?.tid || tid ? (
+
+        {audit?.auditTraceId || audit?.tid || tid ? (
           <div className="advisor-trustline-row">
-            <span className="advisor-trustline-label">Trace Evidence Hash:</span>
-            <code className="advisor-trustline-code">{audit?.auditEvidenceHash || tid}</code>
+            <span className="advisor-trustline-label">Audit Trace ID:</span>
+            <code className="advisor-trustline-code">{audit?.auditTraceId || audit?.auditEvidenceHash || tid}</code>
           </div>
         ) : null}
-        {audit?.reasoningSummary && (
+
+        {audit?.reasonBrief && (
+          <p className="advisor-trustline-summary advisor-trustline-summary--brief">
+            <strong>Reason:</strong> {audit.reasonBrief}
+          </p>
+        )}
+
+        {audit?.reasoningSummary && !audit.reasonBrief && (
           <p className="advisor-trustline-summary">{audit.reasoningSummary}</p>
         )}
       </div>

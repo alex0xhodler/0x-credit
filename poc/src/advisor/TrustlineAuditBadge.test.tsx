@@ -29,7 +29,7 @@ describe('TrustlineAuditBadge', () => {
       />,
     )
 
-    expect(screen.getByText(/t54 Trustline Secured/i)).toBeInTheDocument()
+    expect(screen.getByText(/t54 Trustline Underwritten/i)).toBeInTheDocument()
     expect(screen.getByText(/APPROVE \(LOW RISK\)/i)).toBeInTheDocument()
     expect(screen.getByText(/t54-sid-12345678/i)).toBeInTheDocument()
     expect(screen.getByText(/0xt54_abc123def456/i)).toBeInTheDocument()

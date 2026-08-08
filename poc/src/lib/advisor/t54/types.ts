@@ -27,8 +27,8 @@ export interface RiskSessionResponse {
 }
 
 export interface AgentTraceEvent {
-  type: 'reasoning' | 'tool_call' | 'signal_evaluated' | 'proposal_generated'
-  timestamp: number
+  type: 'reasoning' | 'tool_call' | 'signal_evaluated' | 'proposal_generated' | 'policy_check'
+  timestamp?: number
   description: string
   payload?: Record<string, unknown>
 }
@@ -47,8 +47,8 @@ export interface StoreTraceResponse {
   eventCount: number
 }
 
-export type TrustlineDecision = 'APPROVE' | 'DECLINE' | 'CHALLENGE'
-export type TrustlineRiskLevel = 'low' | 'medium' | 'high'
+export type TrustlineDecision = 'APPROVE' | 'DECLINE' | 'CHALLENGE' | 'REVIEW'
+export type TrustlineRiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 export interface PolicyEvaluationRequest {
   sid: string
@@ -64,9 +64,13 @@ export interface PolicyEvaluationRequest {
 export interface TrustlineAuditEvidence {
   sid: string
   tid: string
+  trustlineTransactionId?: string
+  auditTraceId?: string
   decision: TrustlineDecision
   riskLevel: TrustlineRiskLevel
   riskScore: number // 0.0 - 1.0 (lower is safer)
+  status?: string // 'pending' | 'completed'
+  reasonBrief?: string
   policyCompliance: {
     hfCheckPassed: boolean
     spendingLimitPassed: boolean
@@ -75,6 +79,7 @@ export interface TrustlineAuditEvidence {
   auditEvidenceHash: string
   verifiedAt: number
   reasoningSummary: string
+  portalUrl?: string
 }
 
 export interface EvaluatedProposal {

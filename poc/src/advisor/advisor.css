@@ -1772,6 +1772,16 @@
   word-break: break-all;
 }
 
+.advisor-trustline-link {
+  color: var(--primary, #E42B0C);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.advisor-trustline-link:hover {
+  text-decoration: underline;
+}
+
 .advisor-trustline-summary {
   margin: 4px 0 0;
   font-size: 11px;
