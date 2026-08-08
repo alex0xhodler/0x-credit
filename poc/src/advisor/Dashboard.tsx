@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { TrustlineAuditBadge } from './TrustlineAuditBadge'
 import { assessPosition, type Assessment, type Proposal } from '../lib/advisor/agent/engine'
 import { applyRefinance, rotateExposure, underlyingRawValueUsd } from '../lib/advisor/agent/rebalance'
 import { computeHealthFactor, type HealthFactorResult } from '../lib/advisor/domain/healthFactor'
@@ -177,6 +178,7 @@ function ProposalCard({
               </div>
             </label>
           )}
+          <TrustlineAuditBadge audit={proposal.trustlineAudit} />
           <div className="advisor-proposal-footer">
             <span className="advisor-proposal-projection">
               Projected HF{' '}

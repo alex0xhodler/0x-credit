@@ -1691,3 +1691,76 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* t54 Trustline Secured Badge */
+.advisor-trustline-badge {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--small-radius, 6px);
+  font-size: 12px;
+}
+
+.advisor-trustline-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.advisor-trustline-title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.advisor-trustline-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.advisor-trustline-pill--approved {
+  background: var(--good-bg, rgba(46, 125, 50, 0.1));
+  color: var(--good, #2e7d32);
+}
+
+.advisor-trustline-pill--declined {
+  background: var(--bad-bg, rgba(228, 43, 12, 0.08));
+  color: var(--bad, #E42B0C);
+}
+
+.advisor-trustline-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.advisor-trustline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.advisor-trustline-code {
+  font-family: monospace;
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 1px 5px;
+  border-radius: 3px;
+  word-break: break-all;
+}
+
+.advisor-trustline-summary {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink);
+}
