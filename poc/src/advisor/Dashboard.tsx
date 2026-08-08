@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { TrustlineAuditBadge } from './TrustlineAuditBadge'
+import { TrustlineClient } from '../lib/advisor/t54/trustlineClient'
 import { assessPosition, type Assessment, type Proposal } from '../lib/advisor/agent/engine'
 import { applyRefinance, rotateExposure, underlyingRawValueUsd } from '../lib/advisor/agent/rebalance'
 import { computeHealthFactor, type HealthFactorResult } from '../lib/advisor/domain/healthFactor'
@@ -312,7 +313,21 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     return computeHealthFactor({ collateral: mutated, debts, underlyings: HERO_UNDERLYINGS, market: MARKET })
   }
 
-  const approveProposal = (proposal: Proposal) => {
+  const [sandboxNotice, setSandboxNotice] = useState<string | null>(null)
+  const trustlineClient = useMemo(() => new TrustlineClient({ allowLocalSimulation: true }), [])
+
+  const approveProposal = async (proposal: Proposal) => {
+    const sid = proposal.trustlineAudit?.sid || 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890'
+    const tid = proposal.trustlineAudit?.tid || 'f1e2d3c4-b5a6-4789-81e2-d3c4b5a67890'
+
+    // Submit live x402-secure underwriting execution to t54 sandbox proxy
+    const result = await trustlineClient.submitSandboxExecution({
+      sid,
+      tid,
+      action: proposal.kind,
+      valueUsd: proposal.params.valueUsd,
+    })
+
     if (proposal.kind === 'refinance_stablecoin') {
       if (proposal.params.fromStablecoin && proposal.params.toStablecoin) {
         setDebts(applyRefinance(debts, proposal.params.fromStablecoin, proposal.params.toStablecoin))
@@ -323,10 +338,14 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
       const valueUsd = Math.max(0, (currentWeight - weight) * rawTotal)
       setCollateral(rotateExposure(collateral, proposal.underlyingId, proposal.params.intoUnderlyingId, valueUsd))
     }
+
     markHandled(proposal.id)
     const nextCount = appliedCount + 1
     setAppliedCount(nextCount)
     onAppliedChangesChange?.(nextCount)
+
+    setSandboxNotice(`✓ Proposal [${proposal.kind}] executed & underwritten by t54 Sandbox (${result.decision})`)
+    setTimeout(() => setSandboxNotice(null), 5000)
   }
 
   const dismissProposal = (proposal: Proposal) => markHandled(proposal.id)
@@ -386,6 +405,11 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
   return (
     <div className="advisor-dashboard">
+      {sandboxNotice && (
+        <div className="advisor-sandbox-notice" data-testid="t54-sandbox-notice">
+          {sandboxNotice}
+        </div>
+      )}
       <header className="advisor-dash-header">
         <div className="advisor-brand-row">
           <span className="advisor-brand-mark" aria-hidden="true">

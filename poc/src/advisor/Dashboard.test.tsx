@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { AdvisorApp } from './AdvisorApp'
 
@@ -53,14 +53,18 @@ describe('Dashboard', () => {
     expect(after).not.toBe(before)
   })
 
-  it('approving the proposal applies the rebalance, raises HF, and removes the card', () => {
+  it('approving the proposal applies the rebalance, raises HF, and removes the card', async () => {
     renderDashboard()
     const gauge = screen.getByTestId('hf-gauge')
     const hfBefore = Number(within(gauge).getByTestId('hf-value').textContent)
     const proposal = screen.getByTestId('proposal-reduce_weight:EQUITY:NVDA')
-    fireEvent.click(within(proposal).getByRole('button', { name: /approve/i }))
-    const hfAfter = Number(within(screen.getByTestId('hf-gauge')).getByTestId('hf-value').textContent)
-    expect(hfAfter).toBeGreaterThan(hfBefore)
+    await act(async () => {
+      fireEvent.click(within(proposal).getByRole('button', { name: /approve/i }))
+    })
+    await waitFor(() => {
+      const hfAfter = Number(within(screen.getByTestId('hf-gauge')).getByTestId('hf-value').textContent)
+      expect(hfAfter).toBeGreaterThan(hfBefore)
+    })
     expect(screen.queryByTestId('proposal-reduce_weight:EQUITY:NVDA')).not.toBeInTheDocument()
   })
 
@@ -91,14 +95,18 @@ describe('Dashboard', () => {
     expect(within(refinance).getByText(/break the loop/i)).toBeInTheDocument()
   })
 
-  it('approving the refinance removes USDe from the borrow panel', () => {
+  it('approving the refinance removes USDe from the borrow panel', async () => {
     renderDashboard()
     fireEvent.click(screen.getByRole('button', { name: /simulate securitize/i }))
     expandProposal('proposal-refinance_stablecoin:USDe')
     const refinance = screen.getByTestId('proposal-refinance_stablecoin:USDe')
-    fireEvent.click(within(refinance).getByRole('button', { name: /approve/i }))
-    const borrow = screen.getByTestId('borrow-panel')
-    expect(within(borrow).queryByText('USDe')).not.toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(within(refinance).getByRole('button', { name: /approve/i }))
+    })
+    await waitFor(() => {
+      const borrow = screen.getByTestId('borrow-panel')
+      expect(within(borrow).queryByText('USDe')).not.toBeInTheDocument()
+    })
   })
 
   it('reconfigure returns to the onboarding wizard', () => {

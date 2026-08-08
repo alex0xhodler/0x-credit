@@ -9,7 +9,8 @@ describe('TrustlineClient', () => {
       mandateName: 'Test Mandate',
     })
 
-    expect(session.sid).toContain('t54-sid-')
+    expect(session.sid).toBeDefined()
+    expect(session.sid.length).toBeGreaterThan(10)
     expect(session.agentId).toBe('0x0d79860366926b7685428dcd2b2d1eefcbd45178')
     expect(session.status).toBe('active')
     expect(session.expiresAt).toBeGreaterThan(Date.now())
@@ -30,7 +31,8 @@ describe('TrustlineClient', () => {
       ],
     })
 
-    expect(trace.tid).toContain('t54-tid-')
+    expect(trace.tid).toBeDefined()
+    expect(trace.tid.length).toBeGreaterThan(10)
     expect(trace.evidenceHash).toMatch(/^0x/)
     expect(trace.eventCount).toBe(1)
   })

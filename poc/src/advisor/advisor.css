@@ -1693,6 +1693,20 @@
 }
 
 /* t54 Trustline Secured Badge */
+.advisor-sandbox-notice {
+  margin-bottom: 12px;
+  padding: 10px 16px;
+  background: var(--good-bg, rgba(46, 125, 50, 0.1));
+  border: 1px solid var(--good, #2e7d32);
+  border-radius: var(--small-radius, 6px);
+  color: var(--good, #2e7d32);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .advisor-trustline-badge {
   margin-top: 12px;
   padding: 10px 14px;
