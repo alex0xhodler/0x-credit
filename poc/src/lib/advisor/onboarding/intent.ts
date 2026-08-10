@@ -86,9 +86,28 @@ function buildProviderSplits(): Record<UnderlyingId, ProviderSplit[]> {
     const total = positions.reduce((acc, p) => acc + p.quantity * p.priceUsd, 0)
     splits[underlyingId] = positions.map(p => ({
       token: p.token,
-      share: total === 0 ? 0 : (p.quantity * p.priceUsd) / total,
+      share: total === 0 ? 1 / positions.length : (p.quantity * p.priceUsd) / total,
     }))
   }
+
+  for (const [id, underlying] of Object.entries(HERO_UNDERLYINGS)) {
+    if (!splits[id]) {
+      const cleanAddr = `0x${id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`
+      splits[id] = [{
+        token: {
+          address: cleanAddr,
+          underlyingId: id,
+          issuer: underlying.tier === 'private_equity' ? 'Specialist RWA Co' : 'Backed Finance',
+          providerRiskScore: underlying.tier === 'private_equity' ? 3 : 5,
+          liquidityTier: underlying.tier === 'private_equity' ? 'low' : 'high',
+          redemptionType: underlying.tier === 'private_equity' ? 'private_placement' : 'direct',
+          usesNavFeed: underlying.tier === 'private_equity',
+        },
+        share: 1,
+      }]
+    }
+  }
+
   return splits
 }
 

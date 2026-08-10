@@ -18,6 +18,9 @@ export type UnderlyingTier =
   | 'index_etf' // Index / ETF token — tSPY, tQQQ
   | 'small_mid_cap' // Higher-volatility public equity
   | 'private_equity' // e.g. SpaceX — illiquid, bespoke NAV pricing
+  | 'commodity' // Commodity contracts — xyz:CL, xyz:SILVER, xyz:GOLD
+  | 'index' // Broad index contracts — xyz:XYZ100, xyz:SP500
+  | 'equity' // Equity contracts — xyz:SKHX, xyz:MU, xyz:SNDK
 
 /**
  * Protocol-assigned provider score (1–5) reflecting issuer credit risk,
@@ -36,10 +39,13 @@ export type Stablecoin = 'USDC' | 'USDT' | 'USDe'
 
 export interface Underlying {
   id: UnderlyingId
-  /** Ticker-style display symbol, e.g. `NVDA`. */
+  /** Ticker-style display symbol, e.g. `NVDA`, `xyz:CL`. */
   symbol: string
   name: string
   tier: UnderlyingTier
+  category?: string
+  volumeUsd?: number
+  formattedVolume?: string
 }
 
 /** A specific provider's tokenized representation of an underlying. */
