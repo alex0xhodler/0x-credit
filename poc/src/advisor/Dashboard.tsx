@@ -179,7 +179,7 @@ function ProposalCard({
               </div>
             </label>
           )}
-          <TrustlineAuditBadge audit={proposal.trustlineAudit} />
+          <TrustlineAuditBadge audit={proposal.trustlineAudit} proposalKind={proposal.kind} />
           <div className="advisor-proposal-footer">
             <span className="advisor-proposal-projection">
               Projected HF{' '}
@@ -313,7 +313,6 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     return computeHealthFactor({ collateral: mutated, debts, underlyings: HERO_UNDERLYINGS, market: MARKET })
   }
 
-  const [sandboxNotice, setSandboxNotice] = useState<string | null>(null)
   const trustlineClient = useMemo(() => new TrustlineClient({ allowLocalSimulation: true }), [])
 
   const approveProposal = async (proposal: Proposal) => {
@@ -367,10 +366,6 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     const nextCount = appliedCount + 1
     setAppliedCount(nextCount)
     onAppliedChangesChange?.(nextCount)
-
-    const txMsg = result.trustlineTransactionId ? ` (Tx: ${result.trustlineTransactionId})` : ''
-    setSandboxNotice(`✓ Proposal [${proposal.kind}] underwritten by t54 Platform: ${result.decision}${txMsg}`)
-    setTimeout(() => setSandboxNotice(null), 6000)
   }
 
   const dismissProposal = (proposal: Proposal) => markHandled(proposal.id)
@@ -430,11 +425,6 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
   return (
     <div className="advisor-dashboard">
-      {sandboxNotice && (
-        <div className="advisor-sandbox-notice" data-testid="t54-sandbox-notice">
-          {sandboxNotice}
-        </div>
-      )}
       <header className="advisor-dash-header">
         <div className="advisor-brand-row">
           <span className="advisor-brand-mark" aria-hidden="true">

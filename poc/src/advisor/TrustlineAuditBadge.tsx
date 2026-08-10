@@ -5,10 +5,11 @@ interface TrustlineAuditBadgeProps {
   audit?: TrustlineAuditEvidence
   sid?: string
   tid?: string
+  proposalKind?: string
   onOverrideMandate?: () => void
 }
 
-export function TrustlineAuditBadge({ audit, sid, tid, onOverrideMandate }: TrustlineAuditBadgeProps) {
+export function TrustlineAuditBadge({ audit, sid, tid, proposalKind, onOverrideMandate }: TrustlineAuditBadgeProps) {
   if (!audit && !sid) return null
 
   const [overrideActive, setOverrideActive] = useState(false)
@@ -36,6 +37,12 @@ export function TrustlineAuditBadge({ audit, sid, tid, onOverrideMandate }: Trus
           </span>
         )}
       </div>
+
+      {audit?.trustlineTransactionId && (
+        <div className="advisor-trustline-inline-notice" data-testid="t54-inline-status">
+          ✓ Proposal [{proposalKind || 'rebalance'}] underwritten by t54 Platform: <strong>{decisionText}</strong> (Tx: {audit.trustlineTransactionId})
+        </div>
+      )}
 
       <div className="advisor-trustline-details">
         {audit?.trustlineTransactionId ? (
