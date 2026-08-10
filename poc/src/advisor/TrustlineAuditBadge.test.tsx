@@ -35,7 +35,7 @@ describe('TrustlineAuditBadge', () => {
     expect(screen.getByText(/0xt54_abc123def456/i)).toBeInTheDocument()
   })
 
-  it('renders DECLINED status for risky proposals and supports KYA Mandate override', () => {
+  it('renders DECLINED status for risky proposals and supports KYA Mandate override & trace proof', () => {
     render(
       <TrustlineAuditBadge
         audit={{
@@ -58,7 +58,15 @@ describe('TrustlineAuditBadge', () => {
 
     expect(screen.getByText(/DECLINE \(HIGH RISK\)/i)).toBeInTheDocument()
 
-    const overrideBtn = screen.getByRole('button', { name: /Attach KYA Mandate & Override Fiduciary Gate/i })
+    // Test Proof Inspector toggle
+    const proofToggle = screen.getByRole('button', { name: /Inspect Cryptographic Audit Proof/i })
+    expect(proofToggle).toBeInTheDocument()
+    fireEvent.click(proofToggle)
+    expect(screen.getByTestId('trustline-proof-box')).toBeInTheDocument()
+    expect(screen.getByText(/SHA-256 Event Chain Validated/i)).toBeInTheDocument()
+
+    // Test KYA Mandate Override button
+    const overrideBtn = screen.getByRole('button', { name: /Attach KYA Mandate & Authorize Vault Rebalance/i })
     expect(overrideBtn).toBeInTheDocument()
 
     fireEvent.click(overrideBtn)
