@@ -11,7 +11,7 @@ import type {
 } from './types'
 
 export const DEFAULT_T54_DEV_KEY = 'tl_sandbox_UJTrcBv3FzUg.RIjK-qZqAPPm6ckp-8DVOyurJdNfxlWH9PRjsp20Prs'
-export const DEFAULT_API_URL = 'https://api.trustline.t54.ai'
+export const DEFAULT_API_URL = typeof window !== 'undefined' ? '/t54-api' : 'https://api.trustline.t54.ai'
 
 function generateUuidV4(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
