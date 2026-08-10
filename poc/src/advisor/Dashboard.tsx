@@ -113,6 +113,7 @@ interface ProposalCardProps {
   onDismiss: () => void
   nested?: boolean
   showProviderSymbol?: boolean
+  isUnderwriting?: boolean
 }
 
 /**
@@ -133,6 +134,7 @@ function ProposalCard({
   onDismiss,
   nested,
   showProviderSymbol,
+  isUnderwriting,
 }: ProposalCardProps) {
   const bodyId = `proposal-body-${proposal.id}`
   const delta = projectedHf - currentHf
@@ -179,6 +181,14 @@ function ProposalCard({
               </div>
             </label>
           )}
+
+          {isUnderwriting && (
+            <div className="advisor-underwriting-progress-banner" data-testid="underwriting-progress-banner">
+              <span className="advisor-spinner" aria-hidden="true" />
+              <span>Streaming agent trace & underwritten by t54 Trustline Platform...</span>
+            </div>
+          )}
+
           <TrustlineAuditBadge audit={proposal.trustlineAudit} proposalKind={proposal.kind} />
           <div className="advisor-proposal-footer">
             <span className="advisor-proposal-projection">
@@ -192,11 +202,21 @@ function ProposalCard({
               )}
             </span>
             <div className="advisor-proposal-actions">
-              <button type="button" className="advisor-btn advisor-btn--ghost" onClick={onDismiss}>
+              <button
+                type="button"
+                className="advisor-btn advisor-btn--ghost"
+                onClick={onDismiss}
+                disabled={isUnderwriting}
+              >
                 Dismiss
               </button>
-              <button type="button" className="advisor-btn" onClick={onApprove}>
-                Approve
+              <button
+                type="button"
+                className={`advisor-btn${isUnderwriting ? ' is-loading' : ''}`}
+                onClick={onApprove}
+                disabled={isUnderwriting}
+              >
+                {isUnderwriting ? '⏳ Underwriting...' : 'Approve'}
               </button>
             </div>
           </div>
@@ -313,6 +333,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     return computeHealthFactor({ collateral: mutated, debts, underlyings: HERO_UNDERLYINGS, market: MARKET })
   }
 
+  const [underwritingId, setUnderwritingId] = useState<string | null>(null)
   const [executionNotice, setExecutionNotice] = useState<{
     message: string
     portalUrl?: string
@@ -322,63 +343,68 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
   const trustlineClient = useMemo(() => new TrustlineClient({ allowLocalSimulation: true }), [])
 
   const approveProposal = async (proposal: Proposal) => {
-    const sid = proposal.trustlineAudit?.sid || 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890'
-    const tid = proposal.trustlineAudit?.tid || 'f1e2d3c4-b5a6-4789-81e2-d3c4b5a67890'
+    setUnderwritingId(proposal.id)
+    try {
+      const sid = proposal.trustlineAudit?.sid || 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890'
+      const tid = proposal.trustlineAudit?.tid || 'f1e2d3c4-b5a6-4789-81e2-d3c4b5a67890'
 
-    // Submit live x402-secure underwriting execution to t54 platform
-    const result = await trustlineClient.submitSandboxExecution({
-      sid,
-      tid,
-      action: proposal.kind,
-      valueUsd: proposal.params.valueUsd,
-      fromAsset: proposal.params.fromStablecoin,
-      toAsset: proposal.params.toStablecoin,
-      healthFactorCurrent: assessment.healthFactor,
-      healthFactorProjected: proposal.projectedHf,
-      minAllowedHf: intent.interventionHf ?? 1.15,
-    })
-
-    // Attach real t54 portal transaction ID & underwriting outcome to the proposal
-    proposal.trustlineAudit = {
-      ...(proposal.trustlineAudit || {
+      // Submit live x402-secure underwriting execution to t54 platform
+      const result = await trustlineClient.submitSandboxExecution({
         sid,
         tid,
-        policyCompliance: { hfCheckPassed: true, spendingLimitPassed: true, fiduciaryBoundPassed: true },
-        auditEvidenceHash: result.evidenceHash,
-        verifiedAt: Date.now(),
-        reasoningSummary: '',
-        riskScore: 0.05,
-      }),
-      trustlineTransactionId: result.trustlineTransactionId,
-      auditTraceId: result.auditTraceId,
-      decision: result.decision,
-      riskLevel: result.riskLevel,
-      reasonBrief: result.reasonBrief,
-      portalUrl: result.portalUrl,
-    }
+        action: proposal.kind,
+        valueUsd: proposal.params.valueUsd,
+        fromAsset: proposal.params.fromStablecoin,
+        toAsset: proposal.params.toStablecoin,
+        healthFactorCurrent: assessment.healthFactor,
+        healthFactorProjected: proposal.projectedHf,
+        minAllowedHf: intent.interventionHf ?? 1.15,
+      })
 
-    if (proposal.kind === 'refinance_stablecoin') {
-      if (proposal.params.fromStablecoin && proposal.params.toStablecoin) {
-        setDebts(applyRefinance(debts, proposal.params.fromStablecoin, proposal.params.toStablecoin))
+      // Attach real t54 portal transaction ID & underwriting outcome to the proposal
+      proposal.trustlineAudit = {
+        ...(proposal.trustlineAudit || {
+          sid,
+          tid,
+          policyCompliance: { hfCheckPassed: true, spendingLimitPassed: true, fiduciaryBoundPassed: true },
+          auditEvidenceHash: result.evidenceHash,
+          verifiedAt: Date.now(),
+          reasoningSummary: '',
+          riskScore: 0.05,
+        }),
+        trustlineTransactionId: result.trustlineTransactionId,
+        auditTraceId: result.auditTraceId,
+        decision: result.decision,
+        riskLevel: result.riskLevel,
+        reasonBrief: result.reasonBrief,
+        portalUrl: result.portalUrl,
       }
-    } else if (proposal.underlyingId !== undefined && proposal.params.intoUnderlyingId !== undefined) {
-      const weight = editedWeights[proposal.id] ?? proposal.params.toWeight ?? 0
-      const currentWeight = underlyingRawValueUsd(effectiveCollateral, proposal.underlyingId) / rawTotal
-      const valueUsd = Math.max(0, (currentWeight - weight) * rawTotal)
-      setCollateral(rotateExposure(collateral, proposal.underlyingId, proposal.params.intoUnderlyingId, valueUsd))
+
+      if (proposal.kind === 'refinance_stablecoin') {
+        if (proposal.params.fromStablecoin && proposal.params.toStablecoin) {
+          setDebts(applyRefinance(debts, proposal.params.fromStablecoin, proposal.params.toStablecoin))
+        }
+      } else if (proposal.underlyingId !== undefined && proposal.params.intoUnderlyingId !== undefined) {
+        const weight = editedWeights[proposal.id] ?? proposal.params.toWeight ?? 0
+        const currentWeight = underlyingRawValueUsd(effectiveCollateral, proposal.underlyingId) / rawTotal
+        const valueUsd = Math.max(0, (currentWeight - weight) * rawTotal)
+        setCollateral(rotateExposure(collateral, proposal.underlyingId, proposal.params.intoUnderlyingId, valueUsd))
+      }
+
+      markHandled(proposal.id)
+      const nextCount = appliedCount + 1
+      setAppliedCount(nextCount)
+      onAppliedChangesChange?.(nextCount)
+
+      const txMsg = result.trustlineTransactionId ? ` (Tx: ${result.trustlineTransactionId})` : ''
+      setExecutionNotice({
+        message: `✓ Proposal [${proposal.kind}] underwritten by t54 Platform: ${result.decision}${txMsg}`,
+        portalUrl: result.portalUrl,
+        decision: result.decision,
+      })
+    } finally {
+      setUnderwritingId(null)
     }
-
-    markHandled(proposal.id)
-    const nextCount = appliedCount + 1
-    setAppliedCount(nextCount)
-    onAppliedChangesChange?.(nextCount)
-
-    const txMsg = result.trustlineTransactionId ? ` (Tx: ${result.trustlineTransactionId})` : ''
-    setExecutionNotice({
-      message: `✓ Proposal [${proposal.kind}] underwritten by t54 Platform: ${result.decision}${txMsg}`,
-      portalUrl: result.portalUrl,
-      decision: result.decision,
-    })
   }
 
   const dismissProposal = (proposal: Proposal) => markHandled(proposal.id)
@@ -401,6 +427,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
         onDismiss={() => dismissProposal(proposal)}
         nested={nested}
         showProviderSymbol={showProviderSymbol}
+        isUnderwriting={underwritingId === proposal.id}
       />
     )
   }

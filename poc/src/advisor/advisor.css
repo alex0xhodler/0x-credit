@@ -1789,6 +1789,43 @@
   color: var(--ink);
 }
 
+.advisor-underwriting-progress-banner {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--line-strong, #ddd);
+  border-left: 3px solid #0288d1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.advisor-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-top-color: var(--primary, #E42B0C);
+  border-radius: 50%;
+  animation: advisor-spin 0.7s linear infinite;
+}
+
+@keyframes advisor-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.advisor-btn.is-loading {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+
 .advisor-execution-banner {
   margin: 0 0 16px 0;
   padding: 10px 14px;
