@@ -20,10 +20,10 @@ function selectStock(symbol: string) {
   fireEvent.click(screen.getByRole('checkbox', { name: new RegExp(`^select ${symbol}$`, 'i') }))
 }
 
-/** Builds a minimal valid position (NVDA, $5M) and activates through the full wizard. */
+/** Builds a minimal valid position (xyz:CL, $5M) and activates through the full wizard. */
 function activateFromScratch() {
-  selectStock('NVDA')
-  fireEvent.click(within(stockRow('NVDA')).getByRole('button', { name: '$5M' }))
+  selectStock('xyz:CL')
+  fireEvent.click(within(stockRow('xyz:CL')).getByRole('button', { name: '$5M' }))
   fireEvent.click(screen.getByRole('button', { name: /continue to mandate/i }))
   fireEvent.click(screen.getByRole('button', { name: /continue to review/i }))
   fireEvent.click(screen.getByTestId('activate-agent'))
@@ -69,7 +69,7 @@ describe('AdvisorApp — early access gate', () => {
     const body = JSON.parse(init.body)
     expect(body.email).toBe('trader@example.com')
     expect(body.source).toBe('0x-credit robo-advisor early access')
-    expect(body.deposits).toContain('NVDA')
+    expect(body.deposits).toContain('xyz:CL')
     expect(body.mode).toBe('semi')
   })
 

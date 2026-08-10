@@ -27,6 +27,16 @@ export const HERO_BORROW_APR: Record<Stablecoin, number> = {
 }
 
 export const HERO_UNDERLYINGS: Record<UnderlyingId, Underlying> = {
+  'xyz:CL': { id: 'xyz:CL', symbol: 'xyz:CL', name: 'Crude Oil', tier: 'commodity', category: 'Commodity', volumeUsd: 65460000000, formattedVolume: '$65.46B' },
+  'xyz:SILVER': { id: 'xyz:SILVER', symbol: 'xyz:SILVER', name: 'Silver', tier: 'commodity', category: 'Commodity', volumeUsd: 55340000000, formattedVolume: '$55.34B' },
+  'xyz:XYZ100': { id: 'xyz:XYZ100', symbol: 'xyz:XYZ100', name: 'Tech 100 Index', tier: 'index', category: 'Index', volumeUsd: 51810000000, formattedVolume: '$51.81B' },
+  'xyz:SP500': { id: 'xyz:SP500', symbol: 'xyz:SP500', name: 'S&P 500', tier: 'index', category: 'Index', volumeUsd: 30960000000, formattedVolume: '$30.96B' },
+  'xyz:BRENTOIL': { id: 'xyz:BRENTOIL', symbol: 'xyz:BRENTOIL', name: 'Brent Crude', tier: 'commodity', category: 'Commodity', volumeUsd: 30410000000, formattedVolume: '$30.41B' },
+  'xyz:SKHX': { id: 'xyz:SKHX', symbol: 'xyz:SKHX', name: 'SK Hynix', tier: 'equity', category: 'Equity', volumeUsd: 15150000000, formattedVolume: '$15.15B' },
+  'xyz:MU': { id: 'xyz:MU', symbol: 'xyz:MU', name: 'Micron Technology', tier: 'equity', category: 'Equity', volumeUsd: 14550000000, formattedVolume: '$14.55B' },
+  'xyz:GOLD': { id: 'xyz:GOLD', symbol: 'xyz:GOLD', name: 'Gold', tier: 'commodity', category: 'Commodity', volumeUsd: 13540000000, formattedVolume: '$13.54B' },
+  'xyz:SPCX': { id: 'xyz:SPCX', symbol: 'xyz:SPCX', name: 'SpaceX', tier: 'private_equity', category: 'Private Equity', volumeUsd: 12350000000, formattedVolume: '$12.35B' },
+  'xyz:SNDK': { id: 'xyz:SNDK', symbol: 'xyz:SNDK', name: 'SanDisk / Storage', tier: 'equity', category: 'Equity', volumeUsd: 9940000000, formattedVolume: '$9.94B' },
   'EQUITY:NVDA': { id: 'EQUITY:NVDA', symbol: 'NVDA', name: 'NVIDIA', tier: 'blue_chip' },
   'EQUITY:SPY': { id: 'EQUITY:SPY', symbol: 'SPY', name: 'S&P 500 ETF', tier: 'index_etf' },
   'EQUITY:AAPL': { id: 'EQUITY:AAPL', symbol: 'AAPL', name: 'Apple', tier: 'blue_chip' },

@@ -20,13 +20,24 @@ import {
   maxBorrowUsd,
   type IntentConfig,
 } from '../lib/advisor/onboarding/intent'
+import { signalsForPosition, type SignalFeed } from '../lib/advisor/agent/signals'
 import type { CollateralPosition, DebtPosition, UnderlyingId } from '../lib/advisor/types'
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
-const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
+const DEFAULT_UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
 
-const SERIES_COLOR: Record<UnderlyingId, string> = {
+const SERIES_COLOR: Record<string, string> = {
+  'xyz:CL': '#F97316',
+  'xyz:SILVER': '#94A3B8',
+  'xyz:XYZ100': '#38BDF8',
+  'xyz:SP500': '#34D399',
+  'xyz:BRENTOIL': '#EA580C',
+  'xyz:SKHX': '#A855F7',
+  'xyz:MU': '#7DA2FF',
+  'xyz:GOLD': '#FBBF24',
+  'xyz:SPCX': '#C084FC',
+  'xyz:SNDK': '#EC4899',
   'EQUITY:NVDA': '#7DA2FF',
   'EQUITY:SPY': '#34D399',
   'EQUITY:AAPL': '#FBBF24',
@@ -114,6 +125,7 @@ interface ProposalCardProps {
   nested?: boolean
   showProviderSymbol?: boolean
   isUnderwriting?: boolean
+  signals?: readonly SignalFeed[]
 }
 
 /**
@@ -135,6 +147,7 @@ function ProposalCard({
   nested,
   showProviderSymbol,
   isUnderwriting,
+  signals,
 }: ProposalCardProps) {
   const bodyId = `proposal-body-${proposal.id}`
   const delta = projectedHf - currentHf
@@ -158,11 +171,14 @@ function ProposalCard({
           <p className="advisor-proposal-rationale">{proposal.rationale}</p>
           {proposal.contributingSignals.length > 0 && (
             <div className="advisor-signal-chips">
-              {proposal.contributingSignals.map(feedId => (
-                <span key={feedId} className="advisor-signal-chip">
-                  {HERO_SIGNALS.find(s => s.feedId === feedId)?.sourceLabel ?? feedId}
-                </span>
-              ))}
+              {proposal.contributingSignals.map(feedId => {
+                const signal = signals?.find(s => s.feedId === feedId) ?? HERO_SIGNALS.find(s => s.feedId === feedId)
+                return (
+                  <span key={feedId} className="advisor-signal-chip">
+                    {signal?.sourceLabel ?? feedId}
+                  </span>
+                )
+              })}
             </div>
           )}
           {proposal.kind === 'reduce_weight' && proposal.underlyingId && (
@@ -277,6 +293,21 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
   const targetWeights = useMemo(() => derivedTargetWeights(intent.deposits), [intent.deposits])
 
+  const activeUnderlyingIds = useMemo(() => {
+    const fromDeposits = Object.entries(intent.deposits)
+      .filter(([, val]) => val > 0)
+      .map(([id]) => id)
+    if (fromDeposits.length > 0) return fromDeposits
+    const fromCollateral = effectiveCollateral.filter(p => p.quantity > 0).map(p => p.token.underlyingId)
+    if (fromCollateral.length > 0) return Array.from(new Set(fromCollateral))
+    return DEFAULT_UNDERLYING_ORDER
+  }, [intent.deposits, effectiveCollateral])
+
+  const activeSignalsList = useMemo(() => {
+    const generated = signalsForPosition(activeUnderlyingIds, MARKET.now)
+    return generated.length > 0 ? generated : HERO_SIGNALS
+  }, [activeUnderlyingIds])
+
   const assessment = useMemo(
     () =>
       assessPosition({
@@ -285,11 +316,11 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
         underlyings: HERO_UNDERLYINGS,
         targetWeights,
         market: MARKET,
-        signals: HERO_SIGNALS,
+        signals: activeSignalsList,
         interventionHf: intent.interventionHf,
         stablecoinBackings: reflexiveMode ? REFLEXIVE_BACKINGS : undefined,
       }),
-    [effectiveCollateral, debts, reflexiveMode, targetWeights, intent.interventionHf],
+    [effectiveCollateral, debts, reflexiveMode, targetWeights, intent.interventionHf, activeSignalsList],
   )
 
   const visibleProposals = assessment.proposals.filter(p => !handledIds.has(p.id))
@@ -428,6 +459,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
         nested={nested}
         showProviderSymbol={showProviderSymbol}
         isUnderwriting={underwritingId === proposal.id}
+        signals={activeSignalsList}
       />
     )
   }
@@ -586,7 +618,9 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
               <span className="advisor-overline">Basket</span>
               <span className="advisor-rail-panel-value">{formatUsd(rawTotal)}</span>
             </div>
-            {UNDERLYING_ORDER.map(id => {
+            {activeUnderlyingIds.map(id => {
+              const underlying = HERO_UNDERLYINGS[id]
+              if (!underlying) return null
               const drift = assessment.drift.find(d => d.underlyingId === id)
               const current = drift?.current ?? 0
               const target = drift?.target ?? 0
@@ -594,12 +628,12 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
               const breached = drift?.breached ?? false
               return (
                 <div key={id} className="advisor-basket-row">
-                  <span className="advisor-asset-dot" style={{ background: SERIES_COLOR[id] }} />
-                  <span className="advisor-basket-symbol">{HERO_UNDERLYINGS[id].symbol}</span>
+                  <span className="advisor-asset-dot" style={{ background: SERIES_COLOR[id] || '#7DA2FF' }} />
+                  <span className="advisor-basket-symbol">{underlying.symbol}</span>
                   <span className="advisor-basket-bar">
                     <span
                       className="advisor-basket-bar-fill"
-                      style={{ width: `${current * 100}%`, background: SERIES_COLOR[id] }}
+                      style={{ width: `${current * 100}%`, background: SERIES_COLOR[id] || '#7DA2FF' }}
                     />
                     <span className="advisor-basket-bar-tick" style={{ left: `${target * 100}%` }} />
                   </span>
@@ -635,7 +669,7 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
           <section className="advisor-rail-panel" data-testid="signals-panel">
             <span className="advisor-overline">Signals</span>
-            {HERO_SIGNALS.map(s => (
+            {activeSignalsList.map(s => (
               <div key={s.feedId} className="advisor-signal-row">
                 <span className={`advisor-signal-dot advisor-signal-dot--${s.direction}`} />
                 <div>

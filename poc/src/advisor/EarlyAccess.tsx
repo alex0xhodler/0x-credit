@@ -12,7 +12,18 @@ import type { UnderlyingId } from '../lib/advisor/types'
  */
 const EARLY_ACCESS_ENDPOINT = 'https://formspree.io/f/xrenlrpa'
 
-const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
+const UNDERLYING_ORDER: UnderlyingId[] = [
+  'xyz:CL',
+  'xyz:SILVER',
+  'xyz:XYZ100',
+  'xyz:SP500',
+  'xyz:BRENTOIL',
+  'xyz:SKHX',
+  'xyz:MU',
+  'xyz:GOLD',
+  'xyz:SPCX',
+  'xyz:SNDK',
+]
 
 const MODE_LABEL: Record<IntentConfig['mode'], string> = {
   manual: 'Manual',

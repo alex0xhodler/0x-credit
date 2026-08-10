@@ -16,6 +16,9 @@ export const BASE_LTV_TIERS: Record<UnderlyingTier, LtvParams> = {
   index_etf: { maxLtv: 0.75, liquidationThreshold: 0.82 },
   small_mid_cap: { maxLtv: 0.5, liquidationThreshold: 0.62 },
   private_equity: { maxLtv: 0.45, liquidationThreshold: 0.58 },
+  commodity: { maxLtv: 0.65, liquidationThreshold: 0.75 },
+  index: { maxLtv: 0.75, liquidationThreshold: 0.82 },
+  equity: { maxLtv: 0.65, liquidationThreshold: 0.75 },
 }
 
 /** Per-step LTV reduction applied for each provider score below 5. */

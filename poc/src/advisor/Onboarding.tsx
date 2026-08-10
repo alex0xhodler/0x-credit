@@ -32,13 +32,27 @@ import type { ProviderRiskScore, Stablecoin, Underlying, UnderlyingId } from '..
 
 const MARKET = { equityMarketOpen: true, now: HERO_NOW }
 
-const UNDERLYING_ORDER: UnderlyingId[] = ['EQUITY:NVDA', 'EQUITY:SPY', 'EQUITY:AAPL', 'EQUITY:SPACEX']
+const UNDERLYING_ORDER: UnderlyingId[] = [
+  'xyz:CL',
+  'xyz:SILVER',
+  'xyz:XYZ100',
+  'xyz:SP500',
+  'xyz:BRENTOIL',
+  'xyz:SKHX',
+  'xyz:MU',
+  'xyz:GOLD',
+  'xyz:SPCX',
+  'xyz:SNDK',
+]
 
 const TIER_CHIP_LABEL: Record<Underlying['tier'], string> = {
   blue_chip: 'Blue chip',
   index_etf: 'Index / ETF',
   small_mid_cap: 'Small / mid cap',
   private_equity: 'Private · manual approval only',
+  commodity: 'Commodity',
+  index: 'Index',
+  equity: 'Equity',
 }
 
 const STEP_LABELS = ['Position', 'Mandate', 'Review']
@@ -174,6 +188,7 @@ interface StockRowProps {
 function StockRow({ id, state, onToggle, onAmountChange, onAmountBlur, onPreset }: StockRowProps) {
   const underlying = HERO_UNDERLYINGS[id]
   const meta = STOCK_META[id]
+  const categoryLabel = underlying.category || TIER_CHIP_LABEL[underlying.tier] || underlying.tier
   return (
     <div className={`advisor-stock-row${state.selected ? ' is-selected' : ''}`}>
       <label className="advisor-stock-row-main">
@@ -189,10 +204,10 @@ function StockRow({ id, state, onToggle, onAmountChange, onAmountBlur, onPreset 
           <strong>{underlying.symbol}</strong>
           <span className="advisor-stock-name">{underlying.name}</span>
         </span>
-        <span className="advisor-tier-chip">{TIER_CHIP_LABEL[underlying.tier]}</span>
+        <span className="advisor-tier-chip">{categoryLabel}</span>
         <span className="advisor-stock-meta">Max LTV {meta.maxLtvPct}%</span>
         <span className="advisor-stock-meta">
-          {meta.providerCount} provider{meta.providerCount === 1 ? '' : 's'}
+          {underlying.formattedVolume ? `Vol ${underlying.formattedVolume}` : `${meta.providerCount} provider${meta.providerCount === 1 ? '' : 's'}`}
         </span>
       </label>
       {state.selected && (
