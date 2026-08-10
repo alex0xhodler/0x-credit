@@ -177,11 +177,14 @@ export class TrustlineClient {
       }
     }
 
+    const isUuid = (str?: string) =>
+      Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str))
+
     let sid = params.sid
     let tid = params.tid
 
-    // Auto-bind live Risk Session & Trace if placeholders or missing
-    if (!sid || sid.startsWith('a1b2c3d4') || !tid || tid.startsWith('f1e2d3c4')) {
+    // Auto-bind live Risk Session & Trace if placeholders or non-UUID strings
+    if (!isUuid(sid) || sid.startsWith('a1b2c3d4') || !isUuid(tid) || tid.startsWith('f1e2d3c4')) {
       try {
         const session = await this.createRiskSession({
           agentId: params.payTo || '0x0d79860366926b7685428dcd2b2d1eefcbd45178',
@@ -219,8 +222,8 @@ export class TrustlineClient {
           ],
         })
         tid = trace.tid
-      } catch {
-        // Fall back to provided parameters if session creation fails
+      } catch (err) {
+        console.error('[t54 Trustline Session/Trace Creation Failed]', err)
       }
     }
 
@@ -302,9 +305,12 @@ export class TrustlineClient {
           evidenceHash: auditTraceId || `0xt54_txn_${txId ? txId.replace(/^tl_txn_/, '') : 'submitted'}`,
           responsePayload: finalData,
         }
+      } else {
+        const errText = await res.text()
+        console.error(`[t54 Trustline API Error ${res.status}]`, errText)
       }
-    } catch {
-      // Fall through to simulation
+    } catch (err) {
+      console.error('[t54 Trustline Fetch Exception]', err)
     }
 
     return {

@@ -313,6 +313,12 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     return computeHealthFactor({ collateral: mutated, debts, underlyings: HERO_UNDERLYINGS, market: MARKET })
   }
 
+  const [executionNotice, setExecutionNotice] = useState<{
+    message: string
+    portalUrl?: string
+    decision: string
+  } | null>(null)
+
   const trustlineClient = useMemo(() => new TrustlineClient({ allowLocalSimulation: true }), [])
 
   const approveProposal = async (proposal: Proposal) => {
@@ -366,6 +372,13 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
     const nextCount = appliedCount + 1
     setAppliedCount(nextCount)
     onAppliedChangesChange?.(nextCount)
+
+    const txMsg = result.trustlineTransactionId ? ` (Tx: ${result.trustlineTransactionId})` : ''
+    setExecutionNotice({
+      message: `✓ Proposal [${proposal.kind}] underwritten by t54 Platform: ${result.decision}${txMsg}`,
+      portalUrl: result.portalUrl,
+      decision: result.decision,
+    })
   }
 
   const dismissProposal = (proposal: Proposal) => markHandled(proposal.id)
@@ -505,6 +518,30 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
 
       <div className="advisor-main-grid">
         <section className="advisor-feed-panel" data-testid="proposals-panel">
+          {executionNotice && (
+            <div className="advisor-execution-banner" data-testid="t54-execution-banner">
+              <span className="advisor-execution-banner-text">{executionNotice.message}</span>
+              {executionNotice.portalUrl && (
+                <a
+                  href={executionNotice.portalUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="advisor-execution-banner-link"
+                >
+                  View in t54 Portal ↗
+                </a>
+              )}
+              <button
+                type="button"
+                className="advisor-execution-banner-close"
+                onClick={() => setExecutionNotice(null)}
+                aria-label="Dismiss notice"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           <div className="advisor-feed-head">
             <span className="advisor-overline">Agent proposals</span>
             <span className="advisor-count-pill">{visibleProposals.length}</span>
