@@ -14,6 +14,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: path => path.replace(/^\/gearbox-apy/, '/apy-server'),
       },
+      '/t54-api': {
+        target: 'https://api.trustline.t54.ai',
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/t54-api/, ''),
+      },
     },
   },
   test: {
