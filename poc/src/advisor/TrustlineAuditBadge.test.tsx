@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { TrustlineAuditBadge } from './TrustlineAuditBadge'
 
@@ -33,10 +33,9 @@ describe('TrustlineAuditBadge', () => {
     expect(screen.getByText(/APPROVE \(LOW RISK\)/i)).toBeInTheDocument()
     expect(screen.getByText(/t54-sid-12345678/i)).toBeInTheDocument()
     expect(screen.getByText(/0xt54_abc123def456/i)).toBeInTheDocument()
-    expect(screen.getByText(/Underwriting APPROVED/i)).toBeInTheDocument()
   })
 
-  it('renders DECLINED status for risky proposals', () => {
+  it('renders DECLINED status for risky proposals and supports KYA Mandate override', () => {
     render(
       <TrustlineAuditBadge
         audit={{
@@ -58,6 +57,13 @@ describe('TrustlineAuditBadge', () => {
     )
 
     expect(screen.getByText(/DECLINE \(HIGH RISK\)/i)).toBeInTheDocument()
-    expect(screen.getByText(/Underwriting DECLINED/i)).toBeInTheDocument()
+
+    const overrideBtn = screen.getByRole('button', { name: /Attach KYA Mandate & Override Fiduciary Gate/i })
+    expect(overrideBtn).toBeInTheDocument()
+
+    fireEvent.click(overrideBtn)
+
+    expect(screen.getByText(/APPROVE \(LOW RISK - KYA ATTACHED\)/i)).toBeInTheDocument()
+    expect(screen.getByText(/Institutional KYA Mandate attached/i)).toBeInTheDocument()
   })
 })

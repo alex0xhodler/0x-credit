@@ -326,6 +326,11 @@ export function Dashboard({ intent, onReconfigure, onAppliedChangesChange }: Das
       tid,
       action: proposal.kind,
       valueUsd: proposal.params.valueUsd,
+      fromAsset: proposal.params.fromStablecoin,
+      toAsset: proposal.params.toStablecoin,
+      healthFactorCurrent: assessment.healthFactor,
+      healthFactorProjected: proposal.projectedHf,
+      minAllowedHf: intent.interventionHf ?? 1.15,
     })
 
     // Attach real t54 portal transaction ID & underwriting outcome to the proposal

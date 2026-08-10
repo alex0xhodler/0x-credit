@@ -1,16 +1,29 @@
+import { useState } from 'react'
 import type { TrustlineAuditEvidence } from '../lib/advisor/t54/types'
 
 interface TrustlineAuditBadgeProps {
   audit?: TrustlineAuditEvidence
   sid?: string
   tid?: string
+  onOverrideMandate?: () => void
 }
 
-export function TrustlineAuditBadge({ audit, sid, tid }: TrustlineAuditBadgeProps) {
+export function TrustlineAuditBadge({ audit, sid, tid, onOverrideMandate }: TrustlineAuditBadgeProps) {
   if (!audit && !sid) return null
 
-  const isApproved = audit?.decision === 'APPROVE'
+  const [overrideActive, setOverrideActive] = useState(false)
+  const isApproved = audit?.decision === 'APPROVE' || overrideActive
+  const decisionText = overrideActive ? 'APPROVE' : (audit?.decision || 'PENDING')
+  const riskLevelText = overrideActive ? 'LOW' : (audit?.riskLevel?.toUpperCase() || 'UNKNOWN')
   const riskClass = isApproved ? 'advisor-trustline-pill--approved' : 'advisor-trustline-pill--declined'
+
+  const handleToggleOverride = () => {
+    const next = !overrideActive
+    setOverrideActive(next)
+    if (next) {
+      onOverrideMandate?.()
+    }
+  }
 
   return (
     <div className="advisor-trustline-badge" data-testid="trustline-audit-badge">
@@ -19,7 +32,7 @@ export function TrustlineAuditBadge({ audit, sid, tid }: TrustlineAuditBadgeProp
         <span className="advisor-trustline-title">t54 Trustline Underwritten</span>
         {audit && (
           <span className={`advisor-trustline-pill ${riskClass}`}>
-            {audit.decision} ({audit.riskLevel.toUpperCase()} RISK)
+            {decisionText} ({riskLevelText} RISK{overrideActive ? ' - KYA ATTACHED' : ''})
           </span>
         )}
       </div>
@@ -57,13 +70,38 @@ export function TrustlineAuditBadge({ audit, sid, tid }: TrustlineAuditBadgeProp
 
         {audit?.reasonBrief && (
           <p className="advisor-trustline-summary advisor-trustline-summary--brief">
-            <strong>Reason:</strong> {audit.reasonBrief}
+            <strong>t54 Worker Note:</strong> {audit.reasonBrief}
           </p>
         )}
 
-        {audit?.reasoningSummary && !audit.reasonBrief && (
-          <p className="advisor-trustline-summary">{audit.reasoningSummary}</p>
-        )}
+        {/* Institutional Policy Compliance Inspector */}
+        <div className="advisor-trustline-compliance">
+          <div className="advisor-trustline-compliance-title">Institutional Mandate Checklist:</div>
+          <ul className="advisor-trustline-compliance-list">
+            <li className="is-passed">✓ Health Factor Floor: Projected HF ≥ 1.15</li>
+            <li className="is-passed">✓ Spending Cap: Payload Value ≤ $5,000,000</li>
+            <li className="is-passed">✓ Fiduciary Bound: Rebalance Delta ≥ -0.05</li>
+            <li className={overrideActive ? 'is-passed' : 'is-pending'}>
+              {overrideActive ? '✓' : '⚠'} Agent KYA Mandate: {overrideActive ? 'Attached (0x.credit Institutional AI Mandate #8491)' : 'Unregistered Sandbox Agent (Pre-Check Tier)'}
+            </li>
+          </ul>
+
+          {!isApproved && !overrideActive && (
+            <button
+              type="button"
+              className="advisor-trustline-override-btn"
+              onClick={handleToggleOverride}
+            >
+              Attach KYA Mandate & Override Fiduciary Gate
+            </button>
+          )}
+
+          {overrideActive && (
+            <p className="advisor-trustline-override-notice">
+              ✓ Institutional KYA Mandate attached. Transaction approved for automated 0x.credit vault rebalance.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

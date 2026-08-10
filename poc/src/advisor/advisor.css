@@ -1788,3 +1788,64 @@
   line-height: 1.4;
   color: var(--ink);
 }
+
+.advisor-trustline-compliance {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-strong, #ccc);
+}
+
+.advisor-trustline-compliance-title {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.advisor-trustline-compliance-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10.5px;
+}
+
+.advisor-trustline-compliance-list li {
+  color: var(--muted);
+}
+
+.advisor-trustline-compliance-list li.is-passed {
+  color: var(--good, #2e7d32);
+  font-weight: 500;
+}
+
+.advisor-trustline-compliance-list li.is-pending {
+  color: #b71c1c;
+  font-weight: 600;
+}
+
+.advisor-trustline-override-btn {
+  background: var(--primary, #E42B0C);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.advisor-trustline-override-btn:hover {
+  opacity: 0.9;
+}
+
+.advisor-trustline-override-notice {
+  margin: 6px 0 0 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--good, #2e7d32);
+}
+
