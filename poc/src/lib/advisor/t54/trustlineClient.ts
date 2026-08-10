@@ -242,6 +242,8 @@ export class TrustlineClient {
         to_asset: params.toAsset || 'USDC',
         resource: 'https://0x.credit/api/robo-advisor/rebalance',
         network: 'base-sepolia',
+        client_timestamp: Date.now(),
+        nonce: `0x_credit_${params.action}_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
         policy_compliance: {
           hf_check_passed: (params.healthFactorProjected ?? 1.82) >= (params.minAllowedHf ?? 1.15),
           spending_limit_passed: (params.valueUsd ?? 500000) <= 5000000,
