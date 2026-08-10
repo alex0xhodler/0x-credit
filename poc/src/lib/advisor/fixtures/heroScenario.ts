@@ -35,7 +35,7 @@ export const HERO_UNDERLYINGS: Record<UnderlyingId, Underlying> = {
   'xyz:SKHX': { id: 'xyz:SKHX', symbol: 'xyz:SKHX', name: 'SK Hynix', tier: 'equity', category: 'Equity', volumeUsd: 15150000000, formattedVolume: '$15.15B' },
   'xyz:MU': { id: 'xyz:MU', symbol: 'xyz:MU', name: 'Micron Technology', tier: 'equity', category: 'Equity', volumeUsd: 14550000000, formattedVolume: '$14.55B' },
   'xyz:GOLD': { id: 'xyz:GOLD', symbol: 'xyz:GOLD', name: 'Gold', tier: 'commodity', category: 'Commodity', volumeUsd: 13540000000, formattedVolume: '$13.54B' },
-  'xyz:SPCX': { id: 'xyz:SPCX', symbol: 'xyz:SPCX', name: 'SpaceX (Pre-IPO)', tier: 'private_equity', category: 'Private Equity', volumeUsd: 12350000000, formattedVolume: '$12.35B' },
+  'xyz:SPCX': { id: 'xyz:SPCX', symbol: 'xyz:SPCX', name: 'SpaceX', tier: 'private_equity', category: 'Private Equity', volumeUsd: 12350000000, formattedVolume: '$12.35B' },
   'xyz:SNDK': { id: 'xyz:SNDK', symbol: 'xyz:SNDK', name: 'SanDisk / Storage', tier: 'equity', category: 'Equity', volumeUsd: 9940000000, formattedVolume: '$9.94B' },
   'EQUITY:NVDA': { id: 'EQUITY:NVDA', symbol: 'NVDA', name: 'NVIDIA', tier: 'blue_chip' },
   'EQUITY:SPY': { id: 'EQUITY:SPY', symbol: 'SPY', name: 'S&P 500 ETF', tier: 'index_etf' },
