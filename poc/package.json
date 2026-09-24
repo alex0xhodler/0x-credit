@@ -8,14 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "tsc -b && vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
     "@fontsource/league-gothic": "^5.2.8",
     "@fontsource/manrope": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",
-    "@gearbox-protocol/sdk": "^14.11.3",
+    "@gearbox-protocol/sdk": "17.2.0",
     "@reown/appkit": "1.8.19",
     "@reown/appkit-adapter-wagmi": "1.8.19",
     "@tanstack/react-query": "5.90.3",
