@@ -1,28 +1,38 @@
-import { OnchainSDK } from '@gearbox-protocol/sdk'
-import { ApyPlugin } from '@gearbox-protocol/sdk/plugins/apy'
-import { BotsPlugin } from '@gearbox-protocol/sdk/plugins/bots'
-import { RemoteConfigsPlugin } from '@gearbox-protocol/sdk/plugins/remote-configs'
+import type { StrategyOpportunity } from '@gearbox-protocol/sdk/model'
+import { BOT_PARTIAL_LIQUIDATION, BotsPlugin } from '@gearbox-protocol/sdk/plugins/bots'
+import { OnchainSDK, calcNetStrategyApy } from '@gearbox-protocol/sdk/onchain'
 import type { Address } from 'viem'
+import { fetchCollateralApys } from './apyFeed'
 import {
-  calculateApyForLeverage,
   calculateLeverageForTargetHealthFactor,
   calculateMinimumCollateralForDebt,
   formatOpportunityApy,
 } from './plan'
 
-export const STRATEGY_ID = 'AUSDCT0'
-export const TARGET_TOKEN = '0x942644106B073E30D72c2C5D7529D5C296ea91ab' as Address
-export const MONAD_CHAIN_ID = 143
 export const MAINNET_CHAIN_ID = 1
 export const DEFAULT_SLIPPAGE_BPS = 50
 export const DEFAULT_QUOTA_RESERVE_BPS = 500n
 export const TARGET_HEALTH_FACTOR_BPS = 10_400n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
 export const DEFAULT_GEARBOX_APY_URL = '/gearbox-apy/latest.json'
-export const MONAD_RPC_URL = import.meta.env.VITE_MONAD_RPC_URL || 'https://rpc.monad.xyz'
 export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
 export const MAINNET_STRATEGY_ID = 'wmooCurveETH+-WETH'
 export const GEARBOX_APY_URL = resolveGearboxApyUrl(import.meta.env.VITE_GEARBOX_APY_URL)
+
+const ETH_YIELD_TARGET_TOKEN = '0x02a4cceed3c400b5ba9fd22ad6ec18d8f7a3d48e' as Address
+const MF_ONE_TARGET_TOKEN = '0x238a700eD6165261Cf8b2e544ba797BC11e466Ba' as Address
+const MGLOBAL_TARGET_TOKEN = '0x7433806912Eae67919e66aea853d46Fa0aef98A8' as Address
+
+interface AllowlistedTarget {
+  targetToken: Address
+  strategyId: string
+}
+
+const ALLOWLISTED_TARGETS: AllowlistedTarget[] = [
+  { targetToken: ETH_YIELD_TARGET_TOKEN, strategyId: MAINNET_STRATEGY_ID },
+  { targetToken: MF_ONE_TARGET_TOKEN, strategyId: 'mF-ONE' },
+  { targetToken: MGLOBAL_TARGET_TOKEN, strategyId: 'mGLOBAL' },
+]
 
 export function resolveGearboxApyUrl(url: string | undefined): string {
   if (!url) return DEFAULT_GEARBOX_APY_URL
@@ -37,34 +47,26 @@ export function resolveGearboxApyUrl(url: string | undefined): string {
   }
 }
 
-interface StrategyConfigLike {
-  id: string
+/**
+ * Subset of `StrategyOpportunity` (from `@gearbox-protocol/sdk/model`) that
+ * `buildCreditManagerRoute` needs. Kept as a structural type so the route
+ * builder can be unit-tested without a live SDK/network connection.
+ */
+export interface StrategyOpportunityLike {
+  creditManager: Address
+  targetCollateral: { address: Address; symbol: string; decimals: number }
+  underlyingToken: { address: Address; symbol: string; decimals: number }
   name: string
-  tokenOutAddress: Address
-  creditManagers: Address[]
-  maxLeverage?: number
-}
-
-interface StrategyCreditManagerLike {
-  address: Address
-  baseBorrowRate: number
-  availableToBorrow: bigint
-  feeInterest: number
-  minDebt: bigint
-  maxDebt: bigint
-  quotas: Record<Address, { rate: bigint | number; isActive: boolean } | undefined>
-}
-
-const FALLBACK_STRATEGY: StrategyConfigLike = {
-  id: STRATEGY_ID,
-  name: 'Curve AUSD/USDC/USDT0',
-  tokenOutAddress: TARGET_TOKEN,
-  creditManagers: [
-    '0xf6f044485ac54eecbddfd71586daf351c3ebda88',
-    '0xeCa8b626B91fbf1191230C5d11D5f5ebC1ADbB04',
-    '0x3626c30d386f5900a444b77464ae1b78f8281481',
-    '0xe756919cc2e2b6e844a45dbbacf566b85cb928ab',
-  ],
+  rwa: boolean
+  sunset: boolean
+  paused: boolean
+  liquidationThreshold: number
+  borrowApy: number
+  quotaRate: number
+  minDebt: { value: bigint; valueUsd: number | null }
+  maxBorrowAmount: { value: bigint; valueUsd: number | null }
+  availableLiquidity: { value: bigint; valueUsd: number | null }
+  maxLeverage: number
 }
 
 export interface LoadedGearboxOpportunity {
@@ -83,6 +85,7 @@ export interface LoadedGearboxOpportunity {
   minimumDepositAmount: bigint
   leverageLabel: string
   botAddress?: Address
+  rwa: boolean
   creditManagers: GearboxCreditManagerRoute[]
 }
 
@@ -101,42 +104,69 @@ export interface GearboxCreditManagerRoute {
   collateralToken: Address
   collateralSymbol: string
   collateralDecimals: number
+  rwa: boolean
+  kycRegistrationLink?: string
 }
 
-const cachedOpportunities = new Map<string, Promise<LoadedGearboxOpportunity>>()
+let cachedOpportunities: Promise<LoadedGearboxOpportunity[]> | undefined
 
 export function resetGearboxOpportunityCache() {
-  cachedOpportunities.clear()
+  cachedOpportunities = undefined
 }
 
-export interface LoadOpportunityOptions {
-  chainId: number
-  chainName: 'Mainnet' | 'Arbitrum' | 'Optimism' | 'Monad'
-  rpcUrl: string
-  strategyId: string
-  fallbackStrategy?: StrategyConfigLike
-}
+/**
+ * Builds an app-level credit manager route from an on-chain strategy
+ * opportunity plus the off-chain collateral APY (undefined while the feed is
+ * still loading or has no data for this token). Pure and network-free.
+ *
+ * Units: `opportunity.borrowApy` / `quotaRate` / `collateralApyBps` are SDK
+ * Bps (1% = 100); every rate field on the returned route is in app units
+ * (1% = 10_000), matching `GearboxCreditManagerRoute`'s existing fields.
+ */
+export function buildCreditManagerRoute(
+  opportunity: StrategyOpportunityLike,
+  collateralApyBps: number | undefined,
+  kycRegistrationLink?: string,
+): GearboxCreditManagerRoute {
+  const maxLeverage = calculateLeverageForTargetHealthFactor({
+    liquidationThresholdBps: BigInt(opportunity.liquidationThreshold),
+    maxLeverage: BigInt(Math.floor(opportunity.maxLeverage * 100)),
+    targetHealthFactorBps: TARGET_HEALTH_FACTOR_BPS + TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS,
+  })
 
-export function loadGearboxOpportunity(options?: LoadOpportunityOptions): Promise<LoadedGearboxOpportunity> {
-  const finalOptions = options || {
-    chainId: MONAD_CHAIN_ID,
-    chainName: 'Monad',
-    rpcUrl: MONAD_RPC_URL,
-    strategyId: STRATEGY_ID,
-    fallbackStrategy: FALLBACK_STRATEGY,
+  const apy = collateralApyBps === undefined
+    ? undefined
+    : calcNetStrategyApy(opportunity, collateralApyBps, Number(maxLeverage) / 100, 'aggressive') * 100
+  const baseApy = collateralApyBps === undefined ? undefined : collateralApyBps * 100
+
+  const baseBorrowRate = opportunity.borrowApy * 100
+  const baseQuotaRateWithFee = BigInt(Math.round(opportunity.quotaRate * 100))
+  const totalBorrowRate = baseBorrowRate + Number(baseQuotaRateWithFee)
+
+  return {
+    address: opportunity.creditManager,
+    apy,
+    baseApy,
+    maxLeverage,
+    minimumDepositAmount: calculateMinimumCollateralForDebt({
+      minDebt: opportunity.minDebt.value,
+      leverage: maxLeverage,
+    }),
+    minDebt: opportunity.minDebt.value,
+    maxDebt: opportunity.maxBorrowAmount.value,
+    availableToBorrow: opportunity.availableLiquidity.value,
+    baseBorrowRate,
+    baseQuotaRateWithFee,
+    totalBorrowRate,
+    // For an RWA strategy the target collateral is the wrapped/gated share
+    // token (e.g. mF-ONE); deposits and route accounting stay in the credit
+    // manager's underlying (e.g. frxUSD), never in allowedDepositTokens.
+    collateralToken: opportunity.underlyingToken.address,
+    collateralSymbol: opportunity.underlyingToken.symbol,
+    collateralDecimals: opportunity.underlyingToken.decimals,
+    rwa: opportunity.rwa,
+    kycRegistrationLink,
   }
-  
-  const key = `${finalOptions.chainId}-${finalOptions.strategyId}`
-  let cached = cachedOpportunities.get(key)
-  if (!cached) {
-    cached = createGearboxOpportunity(finalOptions)
-    cachedOpportunities.set(key, cached)
-  }
-  return cached
-}
-
-function addressKey(address: Address): Address {
-  return address.toLowerCase() as Address
 }
 
 export function selectBestCreditManagerForAmount(
@@ -156,19 +186,6 @@ export function selectBestCreditManagerForAmount(
   return [...compatible].sort(compareCreditManagerRoutes)[0]
 }
 
-export function calculateEffectiveBorrowRate({
-  baseBorrowRate,
-  feeInterest,
-  quotaRateWithFee,
-}: {
-  baseBorrowRate: number
-  feeInterest: number
-  quotaRateWithFee: number
-}): number {
-  const baseRateWithFee = Math.floor((baseBorrowRate * (10_000 + feeInterest)) / 10_000)
-  return baseRateWithFee + quotaRateWithFee
-}
-
 function compareCreditManagerRoutes(a: GearboxCreditManagerRoute, b: GearboxCreditManagerRoute): number {
   const apyA = a.apy ?? Number.NEGATIVE_INFINITY
   const apyB = b.apy ?? Number.NEGATIVE_INFINITY
@@ -179,148 +196,102 @@ function compareCreditManagerRoutes(a: GearboxCreditManagerRoute, b: GearboxCred
   return a.address.localeCompare(b.address)
 }
 
-function getSingleQuotaRateWithFee(creditManager: StrategyCreditManagerLike, targetToken: Address): bigint {
-  const quota = creditManager.quotas[addressKey(targetToken)]
-  if (!quota?.isActive) return 0n
-  return (BigInt(quota.rate) * BigInt(10_000 + creditManager.feeInterest)) / 10_000n
+async function attachWithRetry(sdk: OnchainSDK): Promise<void> {
+  try {
+    await sdk.attach()
+  } catch {
+    await sdk.attach()
+  }
 }
 
-async function createGearboxOpportunity(options: LoadOpportunityOptions): Promise<LoadedGearboxOpportunity> {
-  const { chainId, chainName, rpcUrl, strategyId, fallbackStrategy } = options
-  const remoteConfigs = new RemoteConfigsPlugin(true)
-  const apy = new ApyPlugin(true, { apyUrl: GEARBOX_APY_URL })
-  const bots = new BotsPlugin(true)
+export async function checkStrategyEligibility(
+  sdk: OnchainSDK,
+  creditManager: Address,
+  wallet: Address,
+): Promise<boolean> {
+  return sdk.opportunities.isEligibleForStrategy({ chainId: MAINNET_CHAIN_ID, creditManager }, wallet)
+}
 
-  const sdk = new OnchainSDK(
-    chainName,
-    {
-      rpcURLs: [rpcUrl],
-      timeout: 60_000,
-    },
-    {
-      gasLimit: null,
-      plugins: {
-        remoteConfigs,
-        apy,
-        bots,
+function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]> {
+  return (async () => {
+    const bots = new BotsPlugin(true)
+    const sdk = new OnchainSDK(
+      'Mainnet',
+      {
+        rpcURLs: [MAINNET_RPC_URL],
+        timeout: 60_000,
       },
-    },
-  )
+      {
+        gasLimit: null,
+        plugins: { bots },
+      },
+    )
 
-  await sdk.attach()
-
-  await remoteConfigs.load(true).catch(() => undefined)
-  await apy.load(true).catch(() => undefined)
-  await bots.load(true).catch(() => undefined)
-
-  const strategy = (
-    remoteConfigs.loaded
-      ? remoteConfigs.strategies.find(item => item.id === strategyId)
+    await attachWithRetry(sdk)
+    await bots.load(true).catch(() => undefined)
+    const botAddress = bots.loaded
+      ? (bots.bots.find(bot => bot.contractType === BOT_PARTIAL_LIQUIDATION)?.address as Address | undefined)
       : undefined
-  ) as StrategyConfigLike | undefined
 
-  const resolvedStrategy = strategy || fallbackStrategy
-  if (!resolvedStrategy) {
-    throw new Error(`Strategy ${strategyId} not found and no fallback provided.`)
-  }
-  
-  const strategyInfoSnapshot = apy.loaded
-    ? apy.getStrategyInfoSnapshot({
-        slippage: DEFAULT_SLIPPAGE_BPS,
-        quotaReserve: Number(DEFAULT_QUOTA_RESERVE_BPS),
-        curatorFilter: undefined,
-        strategyPayloadsList: remoteConfigs.loaded ? remoteConfigs.strategies : undefined,
-        showHiddenStrategies: false,
+    const collateralApys = await fetchCollateralApys(GEARBOX_APY_URL, MAINNET_CHAIN_ID)
+    const allOpportunities = await sdk.opportunities.list({ kind: 'strategy' })
+
+    const results: LoadedGearboxOpportunity[] = []
+
+    for (const target of ALLOWLISTED_TARGETS) {
+      const liveOpportunities = allOpportunities.filter(
+        (opp): opp is StrategyOpportunity =>
+          opp.kind === 'strategy' &&
+          opp.targetCollateral.address.toLowerCase() === target.targetToken.toLowerCase() &&
+          !opp.sunset &&
+          !opp.paused,
+      )
+      if (liveOpportunities.length === 0) continue
+
+      const routes = await Promise.all(
+        liveOpportunities.map(async opp => {
+          const collateralApyBps = collateralApys.get(target.targetToken.toLowerCase() as Address)
+          const kycRegistrationLink = opp.rwa
+            ? await sdk.opportunities
+                .getStrategy({ chainId: MAINNET_CHAIN_ID, creditManager: opp.creditManager })
+                .then(detail => detail.kyc?.registrationLink)
+                .catch(() => undefined)
+            : undefined
+          return buildCreditManagerRoute(opp, collateralApyBps, kycRegistrationLink)
+        }),
+      )
+
+      const selected = selectBestCreditManagerForAmount(routes, undefined)
+      const first = liveOpportunities[0]
+
+      results.push({
+        sdk,
+        strategyId: target.strategyId,
+        strategyName: first.name,
+        targetToken: target.targetToken,
+        creditManager: (selected?.address ?? first.creditManager) as Address,
+        collateralToken: (selected?.collateralToken ?? routes[0].collateralToken) as Address,
+        collateralSymbol: selected?.collateralSymbol ?? routes[0].collateralSymbol,
+        collateralDecimals: selected?.collateralDecimals ?? routes[0].collateralDecimals,
+        chainName: 'Mainnet',
+        maxApy: selected?.apy,
+        apyLabel: formatOpportunityApy(selected?.apy),
+        maxLeverage: selected?.maxLeverage ?? routes[0].maxLeverage,
+        minimumDepositAmount: selected?.minimumDepositAmount ?? routes[0].minimumDepositAmount,
+        leverageLabel: `${(Number(selected?.maxLeverage ?? routes[0].maxLeverage) / 100).toFixed(2)}x target`,
+        botAddress,
+        rwa: first.rwa,
+        creditManagers: routes,
       })
-    : undefined
-  const info = strategyInfoSnapshot?.strategiesInfo[chainId]?.[strategyId]
-  const strategyCreditManagers = strategyInfoSnapshot?.cmsOfStrategiesByChain?.[chainId]?.[strategyId] as
-    | Record<Address, StrategyCreditManagerLike>
-    | undefined
-  const targetTokenApy = apy.loaded
-    ? apy.state.apySnapshot.apy.apyList?.[resolvedStrategy.tokenOutAddress.toLowerCase() as Address]
-    : undefined
-  const creditManagerOptions = resolvedStrategy.creditManagers
-    .map(address => strategyCreditManagers?.[address] ?? strategyCreditManagers?.[addressKey(address)])
-    .filter((cm): cm is StrategyCreditManagerLike => Boolean(cm))
-  const creditManagers = creditManagerOptions.map(cm => {
-    const cmSuite = sdk.marketRegister.findCreditManager(cm.address)
-    const collateralToken = cmSuite.underlying as Address
-    const collateralMeta = sdk.tokensMeta.get(collateralToken)
-    const collateralSymbol = collateralMeta?.symbol || 'USDC'
-    const collateralDecimals = collateralMeta?.decimals || 6
-    const marketMaxLeverage = info?.maxLeverage && info.maxLeverage > 0n
-      ? info.maxLeverage
-      : BigInt(resolvedStrategy.maxLeverage || 300)
-    const liquidationThreshold = BigInt(cmSuite.creditManager.liquidationThresholds.mustGet(resolvedStrategy.tokenOutAddress))
-    const maxLeverage = calculateLeverageForTargetHealthFactor({
-      liquidationThresholdBps: liquidationThreshold,
-      maxLeverage: marketMaxLeverage,
-      targetHealthFactorBps: TARGET_HEALTH_FACTOR_BPS + TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS,
-    })
-    const minDebt = cmSuite.creditFacade.minDebt ?? cm.minDebt ?? 0n
-    const maxDebt = cmSuite.creditFacade.maxDebt ?? cm.maxDebt ?? 0n
-    const baseQuotaRateWithFee = getSingleQuotaRateWithFee(cm, resolvedStrategy.tokenOutAddress)
-    const totalBorrowRate = calculateEffectiveBorrowRate({
-      baseBorrowRate: cm.baseBorrowRate,
-      feeInterest: cm.feeInterest,
-      quotaRateWithFee: Number(baseQuotaRateWithFee),
-    })
-    const adjustedApy = targetTokenApy === undefined || !info
-      ? info?.maxAPY
-      : calculateApyForLeverage({
-          collateralApy: targetTokenApy,
-          leverage: maxLeverage,
-          baseRateWithFee: totalBorrowRate - Number(baseQuotaRateWithFee),
-          quotaRateWithFee: Number(baseQuotaRateWithFee),
-          bonusApy: info.bonusAPY?.value,
-        })
-
-    return {
-      address: cm.address,
-      apy: adjustedApy,
-      baseApy: targetTokenApy,
-      maxLeverage,
-      minimumDepositAmount: calculateMinimumCollateralForDebt({ minDebt, leverage: maxLeverage }),
-      minDebt,
-      maxDebt,
-      availableToBorrow: cm.availableToBorrow,
-      baseBorrowRate: cm.baseBorrowRate,
-      baseQuotaRateWithFee,
-      totalBorrowRate,
-      collateralToken,
-      collateralSymbol,
-      collateralDecimals,
     }
-  })
-  const selectedCreditManager = selectBestCreditManagerForAmount(creditManagers, 1_000_000_000n)
-  const creditManager = (selectedCreditManager?.address || info?.minCreditManager.address || resolvedStrategy.creditManagers[0]) as Address
-  const cmSuite = sdk.marketRegister.findCreditManager(creditManager)
-  const collateralToken = cmSuite.underlying as Address
-  const collateralMeta = sdk.tokensMeta.get(collateralToken)
-  const collateralSymbol = collateralMeta?.symbol || 'USDC'
-  const collateralDecimals = collateralMeta?.decimals || 6
-  const maxLeverage = selectedCreditManager?.maxLeverage ?? info?.maxLeverage ?? BigInt(resolvedStrategy.maxLeverage || 300)
-  const minimumDepositAmount = selectedCreditManager?.minimumDepositAmount ?? 0n
-  const adjustedApy = selectedCreditManager?.apy ?? info?.maxAPY
-  const botAddress = bots.loaded ? bots.bots[0]?.address as Address | undefined : undefined
 
-  return {
-    sdk,
-    strategyId,
-    strategyName: resolvedStrategy.name,
-    targetToken: resolvedStrategy.tokenOutAddress,
-    creditManager,
-    collateralToken,
-    collateralSymbol,
-    collateralDecimals,
-    chainName,
-    maxApy: adjustedApy,
-    apyLabel: formatOpportunityApy(adjustedApy),
-    maxLeverage,
-    minimumDepositAmount,
-    leverageLabel: `${(Number(maxLeverage) / 100).toFixed(2)}x target`,
-    botAddress,
-    creditManagers,
+    return results
+  })()
+}
+
+export function loadMainnetOpportunities(): Promise<LoadedGearboxOpportunity[]> {
+  if (!cachedOpportunities) {
+    cachedOpportunities = loadMainnetOpportunitiesUncached()
   }
+  return cachedOpportunities
 }
