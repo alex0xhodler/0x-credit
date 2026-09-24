@@ -1,22 +1,35 @@
+import type { RawTx } from '@gearbox-protocol/sdk/onchain'
+import type { Address, Hex } from 'viem'
 import { describe, expect, it, vi } from 'vitest'
-import { prepareOpenStrategyTx } from './sdkAdapter'
+import { prepareOpenStrategyTx, type PrepareOpenStrategySdk } from './sdkAdapter'
 
-const BORROWER = '0x000000000000000000000000000000000000b0b0'
-const USDC = '0x00000000000000000000000000000000000000c1'
-const TARGET = '0x00000000000000000000000000000000000000a1'
-const CM = '0x0000000000000000000000000000000000000cda'
-const FACADE = '0x0000000000000000000000000000000000000fac'
-const BOT = '0x0000000000000000000000000000000000000b07'
-const APPROVAL = '0x0000000000000000000000000000000000000a99'
+const BORROWER = '0x000000000000000000000000000000000000b0b0' as Address
+const USDC = '0x00000000000000000000000000000000000000c1' as Address
+const TARGET = '0x00000000000000000000000000000000000000a1' as Address
+const CM = '0x0000000000000000000000000000000000000cda' as Address
+const FACADE = '0x0000000000000000000000000000000000000fac' as Address
+const BOT = '0x0000000000000000000000000000000000000b07' as Address
+const APPROVAL = '0x0000000000000000000000000000000000000a99' as Address
+
+function rawTxFixture(overrides: Partial<RawTx> = {}): RawTx {
+  return {
+    to: FACADE,
+    value: '0',
+    signature: 'multicall((address,bytes)[])',
+    callData: '0xcafe' as Hex,
+    contractMethod: { inputs: [], name: 'multicall', payable: false },
+    contractInputsValues: {},
+    ...overrides,
+  }
+}
 
 describe('Gearbox SDK adapter', () => {
   it('builds the approve target, router path, open multicall, and bot call from SDK primitives', async () => {
-    const routerCalls = [{ target: '0x0000000000000000000000000000000000000111', callData: '0x1234' }]
-    const botCalls = [{ target: FACADE, callData: '0xbeef' }]
-    const rawTx = { to: FACADE, callData: '0xcafe', value: '0' }
+    const routerCalls = [{ target: '0x0000000000000000000000000000000000000111' as Address, callData: '0x1234' as Hex }]
+    const botCalls = [{ target: FACADE, callData: '0xbeef' as Hex }]
+    const rawTx = rawTxFixture()
 
     const findCreditManager = vi.fn(() => ({
-      underlying: USDC,
       creditManager: {
         address: CM,
         creditFacade: FACADE,
@@ -28,17 +41,15 @@ describe('Gearbox SDK adapter', () => {
       amount: 3_500_000_000n,
       minAmount: 3_482_500_000n,
       calls: routerCalls,
-      balances: { [TARGET]: 3_500_000_000n },
-      minBalances: { [TARGET]: 3_482_500_000n },
     }))
     const getApprovalAddress = vi.fn(async () => APPROVAL)
     const setBot = vi.fn(async () => ({ calls: botCalls }))
-    const openCA = vi.fn(async () => ({ tx: rawTx, calls: [...routerCalls, ...botCalls], creditFacade: FACADE }))
+    const openCA = vi.fn(async () => rawTx)
 
-    const sdk = {
+    const sdk: PrepareOpenStrategySdk = {
       marketRegister: { findCreditManager },
       routerFor: vi.fn(() => ({ findOpenStrategyPath })),
-      accounts: { getApprovalAddress, setBot, openCA },
+      accounts: { getApprovalAddress, bots: { setBot }, openCA },
     }
 
     const result = await prepareOpenStrategyTx({
@@ -104,9 +115,45 @@ describe('Gearbox SDK adapter', () => {
     })
   })
 
+  it('does not call setBot when no bot address is provided, and sends no callsAfter', async () => {
+    const rawTx = rawTxFixture()
+    const findCreditManager = vi.fn(() => ({
+      creditManager: { address: CM, creditFacade: FACADE, collateralTokens: [USDC, TARGET] },
+      creditFacade: { address: FACADE, minDebt: 1_000_000_000n, maxDebt: 10_000_000_000n },
+    }))
+    const findOpenStrategyPath = vi.fn(async () => ({
+      amount: 3_500_000_000n,
+      minAmount: 3_482_500_000n,
+      calls: [],
+    }))
+    const setBot = vi.fn(async () => ({ calls: [] }))
+    const openCA = vi.fn(async () => rawTx)
+
+    const sdk: PrepareOpenStrategySdk = {
+      marketRegister: { findCreditManager },
+      routerFor: vi.fn(() => ({ findOpenStrategyPath })),
+      accounts: { getApprovalAddress: vi.fn(async () => APPROVAL), bots: { setBot }, openCA },
+    }
+
+    await prepareOpenStrategyTx({
+      sdk,
+      borrower: BORROWER,
+      creditManager: CM,
+      collateralToken: USDC,
+      targetToken: TARGET,
+      collateralAmount: 1_000_000_000n,
+      leverage: 350n,
+      quotaReserveBps: 500n,
+      slippageBps: 50,
+      referralCode: 0n,
+    })
+
+    expect(setBot).not.toHaveBeenCalled()
+    expect(openCA).toHaveBeenCalledWith(expect.objectContaining({ callsAfter: [] }))
+  })
+
   it('rejects routes that would borrow below the credit facade min debt before opening a wallet prompt', async () => {
     const findCreditManager = vi.fn(() => ({
-      underlying: USDC,
       creditManager: {
         address: CM,
         creditFacade: FACADE,
@@ -114,12 +161,12 @@ describe('Gearbox SDK adapter', () => {
       },
       creditFacade: { address: FACADE, minDebt: 10_000_000_000n, maxDebt: 100_000_000_000n },
     }))
-    const sdk = {
+    const sdk: PrepareOpenStrategySdk = {
       marketRegister: { findCreditManager },
       routerFor: vi.fn(() => ({ findOpenStrategyPath: vi.fn() })),
       accounts: {
         getApprovalAddress: vi.fn(),
-        setBot: vi.fn(),
+        bots: { setBot: vi.fn() },
         openCA: vi.fn(),
       },
     }
@@ -139,5 +186,34 @@ describe('Gearbox SDK adapter', () => {
 
     expect(sdk.accounts.getApprovalAddress).not.toHaveBeenCalled()
     expect(sdk.accounts.openCA).not.toHaveBeenCalled()
+  })
+
+  it('rejects routes that would borrow above the credit facade max debt', async () => {
+    const findCreditManager = vi.fn(() => ({
+      creditManager: { address: CM, creditFacade: FACADE, collateralTokens: [USDC, TARGET] },
+      creditFacade: { address: FACADE, minDebt: 1_000_000n, maxDebt: 10_000_000n },
+    }))
+    const sdk: PrepareOpenStrategySdk = {
+      marketRegister: { findCreditManager },
+      routerFor: vi.fn(() => ({ findOpenStrategyPath: vi.fn() })),
+      accounts: {
+        getApprovalAddress: vi.fn(),
+        bots: { setBot: vi.fn() },
+        openCA: vi.fn(),
+      },
+    }
+
+    await expect(prepareOpenStrategyTx({
+      sdk,
+      borrower: BORROWER,
+      creditManager: CM,
+      collateralToken: USDC,
+      targetToken: TARGET,
+      collateralAmount: 1_000_000_000_000n,
+      leverage: 925n,
+      quotaReserveBps: 500n,
+      slippageBps: 50,
+      referralCode: 0n,
+    })).rejects.toThrow('Borrow amount is above the maximum debt for this route.')
   })
 })
