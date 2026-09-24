@@ -93,6 +93,16 @@ afterEach(() => {
   window.history.pushState({}, '', '/')
 })
 
+describe('App — routing', () => {
+  it('renders the cockpit instead of the advisor experience for ?view=advisor', async () => {
+    window.history.pushState({}, '', '/?view=advisor')
+    const { App } = await import('./App')
+    render(<App />)
+
+    expect(await screen.findByRole('tablist', { name: /strategy/i })).toBeInTheDocument()
+  })
+})
+
 describe('App — RWA opportunities', () => {
   it('lists RWA opportunities without filtering them out via the negative-APY rule', async () => {
     const { App } = await import('./App')

@@ -390,6 +390,14 @@ describe('TransactionCockpit — RWA strategies with no collateral APY', () => {
   })
 })
 
+describe('TransactionCockpit — header navigation', () => {
+  it('does not render the Institutional Credit entry point', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.queryByText(/institutional credit/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /institutional credit/i })).not.toBeInTheDocument()
+  })
+})
+
 describe('TransactionCockpit — RWA eligibility gate', () => {
   const rwaProps = {
     ...baseProps,

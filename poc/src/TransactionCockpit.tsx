@@ -456,10 +456,11 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 </button>
               ))}
 
-              <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
+              {/* Institutional Credit entry point is disabled for now. */}
+              {/* <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
                 Institutional Credit
                 <span className="advisor-nav-tag">Early access</span>
-              </a>
+              </a> */}
             </div>
           </div>
 

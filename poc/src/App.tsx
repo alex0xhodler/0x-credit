@@ -21,7 +21,8 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { AdvisorApp } from './advisor/AdvisorApp'
+// Institutional Credit / advisor entry point is disabled for now.
+// import { AdvisorApp } from './advisor/AdvisorApp'
 import { GEARBOX_DASHBOARD_URL, TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type RwaExecutionGateView, type TopbarVariant } from './TransactionCockpit'
 import {
   config,
@@ -718,10 +719,10 @@ function GearboxApp() {
 }
 
 export function App() {
-  // Fixture-driven advisor demo — no wallet or chain required.
-  if (new URLSearchParams(window.location.search).get('view') === 'advisor') {
-    return <AdvisorApp />
-  }
+  // Institutional Credit / advisor entry point is disabled for now.
+  // if (new URLSearchParams(window.location.search).get('view') === 'advisor') {
+  //   return <AdvisorApp />
+  // }
 
   return (
     <WagmiProvider config={config}>
