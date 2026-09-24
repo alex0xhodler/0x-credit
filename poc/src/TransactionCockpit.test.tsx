@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { TransactionCockpit } from './TransactionCockpit'
+import { GEARBOX_DASHBOARD_URL, TransactionCockpit } from './TransactionCockpit'
 import { createExecutionSteps } from './lib/gearbox/plan'
 
 const wstEthOpportunity = {
@@ -44,6 +44,26 @@ const wethOpportunity = {
   leverageMultiple: 7.6,
   minimumDeposit: 1.5,
   collateralDecimals: 18,
+}
+
+const mGlobalOpportunity = {
+  id: 'mainnet-mglobal-001',
+  strategyId: 'mGLOBAL',
+  strategyName: 'mGLOBAL',
+  tokenSymbol: 'frxUSD',
+  chainName: 'Ethereum',
+  apyLabel: 'APY n/a',
+  leverageLabel: '4.70x target',
+  protectionLabel: 'Mainnet strategy',
+  minDepositLabel: 'Min deposit: 40540.00 frxUSD',
+  isExecutable: true,
+  apyPercent: undefined,
+  borrowRatePercent: 6.5,
+  leverageMultiple: 4.7,
+  minimumDeposit: 40540,
+  collateralDecimals: 18,
+  rwa: true,
+  kycRegistrationLink: 'https://form.typeform.com/to/DqZaw6kr',
 }
 
 const baseProps = {
@@ -323,3 +343,88 @@ describe('TransactionCockpit — invested state', () => {
     )
   })
 })
+
+describe('TransactionCockpit — RWA strategies with no collateral APY', () => {
+  const rwaProps = {
+    ...baseProps,
+    opportunity: mGlobalOpportunity,
+    opportunities: [wstEthOpportunity, mGlobalOpportunity],
+  }
+
+  it('shows "APY n/a" instead of a loading skeleton when the RWA route has no APY', () => {
+    render(<TransactionCockpit {...rwaProps} />)
+    expect(screen.getAllByText(/apy n\/a/i).length).toBeGreaterThanOrEqual(1)
+    expect(document.querySelector('.builder-apy-shimmer')).not.toBeInTheDocument()
+    expect(document.querySelector('.chart-apy-badge--loading')).not.toBeInTheDocument()
+  })
+
+  it('shows borrow cost and leverage for the RWA route', () => {
+    render(<TransactionCockpit {...rwaProps} />)
+    expect(screen.getByLabelText(/borrow cost and leverage/i)).toBeInTheDocument()
+    expect(screen.getByText('6.50%')).toBeInTheDocument()
+    expect(screen.getByText('4.70x')).toBeInTheDocument()
+  })
+
+  it('does not show "APY n/a" for a regular strategy with a loaded numeric APY', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.queryByText(/apy n\/a/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the exit disclosure with a link to the Gearbox dashboard on the RWA panel', () => {
+    render(<TransactionCockpit {...rwaProps} />)
+    expect(screen.getByText(/exits use delayed midas redemption and are managed on gearbox/i)).toBeInTheDocument()
+    const dashboardLink = screen.getByRole('link', { name: /gearbox dashboard/i })
+    expect(dashboardLink).toHaveAttribute('href', GEARBOX_DASHBOARD_URL)
+    expect(dashboardLink).toHaveAttribute('target', '_blank')
+    expect(dashboardLink).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('does not show the exit disclosure for a non-RWA strategy', () => {
+    render(<TransactionCockpit {...baseProps} />)
+    expect(screen.queryByText(/exits use delayed midas redemption/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show a misleading zero-yield deposit preview when APY is unavailable', () => {
+    render(<TransactionCockpit {...rwaProps} amount="40540" />)
+    expect(screen.queryByLabelText(/position preview/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('TransactionCockpit — RWA eligibility gate', () => {
+  const rwaProps = {
+    ...baseProps,
+    accountStatus: 'connected' as const,
+    opportunity: mGlobalOpportunity,
+    opportunities: [wstEthOpportunity, mGlobalOpportunity],
+  }
+
+  it('disables execution and shows a checking message while eligibility is unresolved', () => {
+    render(<TransactionCockpit {...rwaProps} rwaGate={{ canExecute: false, reason: 'Checking eligibility…' }} />)
+    expect(screen.getByRole('button', { name: /earn/i })).toBeDisabled()
+    expect(screen.getByText('Checking eligibility…')).toBeInTheDocument()
+  })
+
+  it('disables execution and shows the Midas registration link when ineligible', () => {
+    render(
+      <TransactionCockpit
+        {...rwaProps}
+        rwaGate={{
+          canExecute: false,
+          reason: "Your wallet isn't eligible for this strategy yet.",
+          registrationLink: 'https://form.typeform.com/to/DqZaw6kr',
+        }}
+      />,
+    )
+    expect(screen.getByRole('button', { name: /earn/i })).toBeDisabled()
+    expect(screen.getByText(/your wallet isn't eligible for this strategy yet/i)).toBeInTheDocument()
+    const registrationLink = screen.getByRole('link', { name: /complete midas registration/i })
+    expect(registrationLink).toHaveAttribute('href', 'https://form.typeform.com/to/DqZaw6kr')
+    expect(registrationLink).toHaveAttribute('target', '_blank')
+  })
+
+  it('allows execution when the gate reports eligible', () => {
+    render(<TransactionCockpit {...rwaProps} rwaGate={{ canExecute: true }} />)
+    expect(screen.getByRole('button', { name: /earn/i })).toBeEnabled()
+  })
+})
+

@@ -34,7 +34,17 @@ export interface OpportunityView {
   minimumDeposit?: number
   collateralDecimals?: number
   routeSteps?: readonly RouteStep[]
+  rwa?: boolean
+  kycRegistrationLink?: string
 }
+
+export interface RwaExecutionGateView {
+  canExecute: boolean
+  reason?: string
+  registrationLink?: string
+}
+
+export const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
 
 export interface RouteStep {
   role: string
@@ -72,6 +82,7 @@ export interface TransactionCockpitProps {
   activePositionStats?: ActivePositionStats
   headerVariant?: HeaderVariant
   topbarVariant?: TopbarVariant
+  rwaGate?: RwaExecutionGateView
 }
 
 type Horizon = ComparisonHorizon
@@ -251,6 +262,7 @@ export function TransactionCockpit({
   activePositionStats,
   headerVariant = 'editorial',
   topbarVariant = 'shelf',
+  rwaGate,
 }: TransactionCockpitProps) {
   const [horizon, setHorizon] = useState<Horizon>(6)
   const pageHeadingId = useId()
@@ -263,10 +275,14 @@ export function TransactionCockpit({
   const parsedAmount = Number(amount)
   const validAmount = Number.isFinite(parsedAmount) && parsedAmount > 0
 
-  const canExecute = isConnected && isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
+  const canExecute = isConnected && isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning && (rwaGate?.canExecute ?? true)
   const canStart = isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
 
-  const isDataLoading = opportunity.apyPercent === undefined
+  // RWA collateral APY feeds have no data today (both mF-ONE and mGLOBAL) —
+  // that is a loaded, known state, not a still-loading one, so it must not
+  // drive the loading skeletons.
+  const apyUnavailable = Boolean(opportunity.rwa) && opportunity.apyPercent === undefined
+  const isDataLoading = opportunity.apyPercent === undefined && !opportunity.rwa
   const apyPercent = opportunity.apyPercent ?? 0
   const leverageMultiple = opportunity.leverageMultiple ?? 1
   const minimumDeposit = opportunity.minimumDeposit ?? 0
@@ -299,7 +315,7 @@ export function TransactionCockpit({
 const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, positionOpen, activePositionStats)
 
   const actionLabel = isConnected
-    ? isBusy ? 'Opening Smart account...' : `Earn ${apyPercent.toFixed(2)}%`
+    ? isBusy ? 'Opening Smart account...' : apyUnavailable ? 'Earn' : `Earn ${apyPercent.toFixed(2)}%`
     : 'Start earning'
 
   const displayError = error ? formatTransactionError(error) : undefined
@@ -433,7 +449,9 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                   <span>{opp.tokenSymbol}</span>
                   {opp.apyPercent !== undefined
                     ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
-                    : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
+                    : opp.rwa
+                      ? <span className="tab-apy">n/a</span>
+                      : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
                   }
                 </button>
               ))}
@@ -461,7 +479,9 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 <span className="chart-title">{chartTitle} <span className="chart-title-unit">{headerVariant === 'editorial' ? 'estimated' : opportunity.tokenSymbol}</span></span>
                 {isDataLoading
                   ? <span className="chart-apy-badge chart-apy-badge--loading" aria-hidden="true" />
-                  : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
+                  : apyUnavailable
+                    ? <span className="chart-apy-badge">APY n/a</span>
+                    : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
                 }
               </div>
               <div className="horizon-toggle" role="radiogroup" aria-label="Comparison period">
@@ -506,11 +526,17 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             <div className="chart-grow chart-comparison" aria-label="Historical benchmark rates and future yield projection">
               {isDataLoading
                 ? <ChartSkeleton />
-                : <YieldComparisonChart startingBalance={chartStartingBalance} apyPercent={apyPercent} benchmarks={benchmarks} horizon={horizon} />
+                : apyUnavailable
+                  ? (
+                    <p className="chart-apy-unavailable">
+                      This strategy has no published collateral APY yet. Review the borrow cost and leverage below before opening a position.
+                    </p>
+                  )
+                  : <YieldComparisonChart startingBalance={chartStartingBalance} apyPercent={apyPercent} benchmarks={benchmarks} horizon={horizon} />
               }
             </div>
 
-            {!isDataLoading && (
+            {!isDataLoading && !apyUnavailable && (
               <div className="chart-footer">
                 <span className="cf-item">
                   <span className="cf-swatch cf-swatch--amp" />
@@ -538,11 +564,27 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 <span className="builder-token-sep"> · </span>
                 {isDataLoading
                   ? <span className="builder-apy-shimmer" aria-hidden="true" />
-                  : `${apyPercent.toFixed(2)}% APY`
+                  : apyUnavailable
+                    ? 'APY n/a'
+                    : `${apyPercent.toFixed(2)}% APY`
                 }
               </strong>
               <span className="builder-strategy">{opportunity.strategyName}</span>
             </div>
+
+            {opportunity.rwa && (
+              <div className="rwa-cost-summary" aria-label="Borrow cost and leverage">
+                <span>Borrow cost <strong>{`${(opportunity.borrowRatePercent ?? 0).toFixed(2)}%`}</strong></span>
+                <span>Leverage <strong>{`${(opportunity.leverageMultiple ?? 1).toFixed(2)}x`}</strong></span>
+              </div>
+            )}
+
+            {opportunity.rwa && (
+              <p className="rwa-disclosure">
+                Exits use delayed Midas redemption and are managed on Gearbox.{' '}
+                <a href={GEARBOX_DASHBOARD_URL} target="_blank" rel="noopener noreferrer">Gearbox dashboard</a>
+              </p>
+            )}
 
             {/* Deposit input */}
             <div className={`deposit-section${isDataLoading ? ' is-loading' : ''}`}>
@@ -601,6 +643,14 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             )}
             {routeWarning && <p className="alert">{routeWarning}</p>}
             {!routeWarning && opportunity.disabledReason && <p className="alert">{opportunity.disabledReason}</p>}
+            {rwaGate && !rwaGate.canExecute && (
+              <p className="alert">
+                {rwaGate.reason}
+                {rwaGate.registrationLink && (
+                  <> <a href={rwaGate.registrationLink} target="_blank" rel="noopener noreferrer">Complete Midas registration</a></>
+                )}
+              </p>
+            )}
             {displayError && <p className="alert">{displayError}</p>}
 
             {hasStoredPosition && !positionOpen && onViewPosition && (
@@ -643,7 +693,7 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 </div>
               )
             })()}
-              {validAmount && annualYield !== undefined && (
+              {validAmount && !apyUnavailable && annualYield !== undefined && (
                 <div className="position-preview" aria-label="Position preview">
                   <div className="preview-row">
                     <span className="preview-pay">

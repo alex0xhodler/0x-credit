@@ -22,7 +22,7 @@ import {
 } from 'wagmi'
 import './App.css'
 import { AdvisorApp } from './advisor/AdvisorApp'
-import { TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type TopbarVariant } from './TransactionCockpit'
+import { GEARBOX_DASHBOARD_URL, TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type RwaExecutionGateView, type TopbarVariant } from './TransactionCockpit'
 import {
   config,
   isReownProjectConfigured,
@@ -41,6 +41,7 @@ import {
   type ExecutionStep,
 } from './lib/gearbox/plan'
 import {
+  checkStrategyEligibility,
   DEFAULT_QUOTA_RESERVE_BPS,
   DEFAULT_SLIPPAGE_BPS,
   loadMainnetOpportunities,
@@ -49,12 +50,12 @@ import {
   type GearboxCreditManagerRoute,
   type LoadedGearboxOpportunity,
 } from './lib/gearbox/live'
+import { rwaExecutionGate, type RwaEligibilityStatus } from './lib/gearbox/eligibility'
 import { prepareOpenStrategyTx } from './lib/gearbox/sdkAdapter'
 import { assertSuccessfulReceipt, formatTransactionError } from './lib/gearbox/transactions'
 import { routeProvenanceForStrategy } from './lib/routeProvenance'
 
 const queryClient = new QueryClient()
-const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
 const MAINNET_WETH_OPPORTUNITY_ID = 'mainnet-weth-wmoo-curve-eth-weth'
 const HEADER_VARIANTS: HeaderVariant[] = ['desk', 'journey', 'ticket', 'editorial']
 const TOPBAR_VARIANTS: TopbarVariant[] = ['identity', 'shelf', 'switchboard', 'portfolio']
@@ -266,6 +267,8 @@ function GearboxApp() {
           minimumDeposit: Number(route.minimumDepositAmount) / Math.pow(10, route.collateralDecimals),
           collateralDecimals: route.collateralDecimals,
           routeSteps: routeProvenanceForStrategy(opp.strategyId, 'Ethereum'),
+          rwa: route.rwa,
+          kycRegistrationLink: route.kycRegistrationLink,
         })
       })
     }
@@ -371,6 +374,42 @@ function GearboxApp() {
       cancelled = true
     }
   }, [address, opportunity, selectedRoute])
+
+  const [rwaEligibility, setRwaEligibility] = useState<RwaEligibilityStatus>('unknown')
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!address || !opportunity || !selectedRoute?.rwa) {
+      setRwaEligibility('unknown')
+      return
+    }
+
+    setRwaEligibility('checking')
+    checkStrategyEligibility(opportunity.sdk, selectedRoute.address, address)
+      .then(eligible => {
+        if (cancelled) return
+        setRwaEligibility(eligible ? 'eligible' : 'ineligible')
+      })
+      .catch(() => {
+        if (!cancelled) setRwaEligibility('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [address, opportunity, selectedRoute])
+
+  const rwaGate = useMemo<RwaExecutionGateView>(
+    () =>
+      rwaExecutionGate({
+        rwa: Boolean(selectedRoute?.rwa),
+        walletConnected: isConnected,
+        eligibility: rwaEligibility,
+        kycRegistrationLink: selectedRoute?.kycRegistrationLink,
+      }),
+    [isConnected, rwaEligibility, selectedRoute],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -651,6 +690,7 @@ function GearboxApp() {
         setHasStartedFlow(true)
       }}
       routeWarning={displayedRouteWarning}
+      rwaGate={displayedOpportunity.rwa ? rwaGate : undefined}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
       onConnect={() => {
