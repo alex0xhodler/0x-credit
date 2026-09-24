@@ -38,13 +38,11 @@ interface AccountsLike {
     creditManager: Address
     borrower: Address
   }): Promise<Address>
-  // Moved in SDK v17: bots are set via accounts.bots.setBot, not accounts.setBot.
   // Setting a bot on a credit manager (rather than an existing credit
   // account) yields calls only, no standalone transaction.
   bots: {
     setBot(args: SetBotProps): Promise<{ calls: MultiCall[] }>
   }
-  // v17: openCA returns the RawTx directly (v14 returned `{ tx: RawTx }`).
   openCA(args: OpenCAProps): Promise<RawTx>
 }
 
