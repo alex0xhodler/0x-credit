@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const attach = vi.fn()
 const listOpportunities = vi.fn()
+const apiOpportunitiesList = vi.fn()
 
 vi.mock('@gearbox-protocol/sdk/onchain', async () => {
   const actual = await vi.importActual<typeof import('@gearbox-protocol/sdk/onchain')>('@gearbox-protocol/sdk/onchain')
@@ -23,9 +24,15 @@ vi.mock('@gearbox-protocol/sdk/plugins/bots', async () => {
   }
 })
 
-vi.mock('./apyFeed', () => ({
-  fetchCollateralApys: vi.fn().mockResolvedValue(new Map()),
-}))
+vi.mock('@gearbox-protocol/sdk/offchain', async () => {
+  const actual = await vi.importActual<typeof import('@gearbox-protocol/sdk/offchain')>('@gearbox-protocol/sdk/offchain')
+  return {
+    ...actual,
+    GearboxAPI: vi.fn(function () {
+      return { opportunities: { list: apiOpportunitiesList } }
+    }),
+  }
+})
 
 const { loadMainnetOpportunities, resetGearboxOpportunityCache } = await import('./live')
 
@@ -34,6 +41,7 @@ describe('loadMainnetOpportunities', () => {
     resetGearboxOpportunityCache()
     attach.mockReset()
     listOpportunities.mockReset()
+    apiOpportunitiesList.mockReset().mockResolvedValue({ data: [] })
   })
 
   it('does not keep a failed load cached, so the next call attaches again', async () => {
@@ -51,5 +59,13 @@ describe('loadMainnetOpportunities', () => {
 
     await expect(loadMainnetOpportunities()).resolves.toEqual([])
     expect(attach).toHaveBeenCalledTimes(2)
+  })
+
+  it('never throws from a failed backend collateral-apy fetch — routes still load with apy undefined', async () => {
+    attach.mockResolvedValue(undefined)
+    apiOpportunitiesList.mockReset().mockRejectedValue(new Error('backend down'))
+    listOpportunities.mockResolvedValue([])
+
+    await expect(loadMainnetOpportunities()).resolves.toEqual([])
   })
 })

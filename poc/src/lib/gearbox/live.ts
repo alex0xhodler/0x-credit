@@ -114,9 +114,21 @@ export interface GearboxCreditManagerRoute {
 }
 
 let cachedOpportunities: Promise<LoadedGearboxOpportunity[]> | undefined
+let attachedMainnetSdk: OnchainSDK | undefined
+
+/**
+ * The one `OnchainSDK` attached by `loadMainnetOpportunities`, for callers
+ * (the strategy back-test's NAV history read) that need on-chain access but
+ * aren't handed an `OpportunityView`'s sdk directly. Undefined before the
+ * first successful load.
+ */
+export function getAttachedMainnetSdk(): OnchainSDK | undefined {
+  return attachedMainnetSdk
+}
 
 export function resetGearboxOpportunityCache() {
   cachedOpportunities = undefined
+  attachedMainnetSdk = undefined
 }
 
 export interface BuildRouteOptions {
@@ -451,6 +463,7 @@ function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]>
     )
 
     await attachWithRetry(sdk)
+    attachedMainnetSdk = sdk
     await bots.load(true).catch(() => undefined)
     const botAddress = bots.loaded
       ? (bots.bots.find(bot => bot.contractType === BOT_PARTIAL_LIQUIDATION)?.address as Address | undefined)
@@ -479,8 +492,14 @@ function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]>
                 .then(detail => detail.kyc?.registrationLink)
                 .catch(() => undefined)
             : undefined
-          const collateralApyBps = collateralApysByCm.get(opp.creditManager.toLowerCase() as Address)
-          return buildCreditManagerRoute(opp, collateralApyBps, { kycRegistrationLink })
+          const collateralApyBps = target.collateralApySource === 'nav'
+            ? await fetchNavRounds(sdk, opp.creditManager, target.targetToken)
+                .then(rounds => rounds && calculateNavApyBps(rounds, Math.floor(Date.now() / 1000)))
+            : collateralApysByCm.get(opp.creditManager.toLowerCase() as Address)
+          return buildCreditManagerRoute(opp, collateralApyBps, {
+            kycRegistrationLink,
+            collateralApySource: target.collateralApySource,
+          })
         }),
       )
 
