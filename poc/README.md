@@ -19,9 +19,8 @@ Required:
 
 Optional:
 
-- `VITE_MONAD_RPC_URL`: Monad RPC used by the Gearbox SDK. Defaults to `https://rpc.monad.xyz`.
-- `VITE_MAINNET_RPC_URL`: Ethereum Mainnet RPC. Defaults to `https://ethereum-rpc.publicnode.com`.
-- `VITE_GEARBOX_APY_URL`: APY snapshot URL. Defaults to `/gearbox-apy/latest.json`, proxied by Vite locally and Vercel in production.
+- `VITE_MAINNET_RPC_URL`: Ethereum Mainnet RPC used by the Gearbox SDK. Set a dedicated RPC in production; the public default occasionally fails. Defaults to `https://ethereum-rpc.publicnode.com`.
+- `VITE_GEARBOX_APY_URL`: Collateral APY snapshot URL (the only off-chain strategy input). Defaults to `/gearbox-apy/latest.json`, proxied by Vite locally and Vercel in production.
 
 ## Resources
 
