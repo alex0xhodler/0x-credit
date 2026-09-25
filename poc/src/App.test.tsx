@@ -20,6 +20,11 @@ const wethRoute: GearboxCreditManagerRoute = {
   collateralSymbol: 'WETH',
   collateralDecimals: 18,
   rwa: false,
+  strategyName: 'ETH+ / WETH',
+  targetSymbol: 'wmooCurveETH+-WETH',
+  curator: 'KPK',
+  liquidationThresholdBps: 9000,
+  collateralApySource: 'backend',
 }
 
 const mfOneRoute: GearboxCreditManagerRoute = {
@@ -39,6 +44,11 @@ const mfOneRoute: GearboxCreditManagerRoute = {
   collateralDecimals: 18,
   rwa: true,
   kycRegistrationLink: undefined,
+  strategyName: 'mF-ONE',
+  targetSymbol: 'mF-ONE',
+  curator: 'KPK',
+  liquidationThresholdBps: 8500,
+  collateralApySource: 'nav',
 }
 
 const mGlobalRoute: GearboxCreditManagerRoute = {
@@ -47,6 +57,8 @@ const mGlobalRoute: GearboxCreditManagerRoute = {
   minimumDepositAmount: 40_540_000_000_000_000_000_000n,
   maxLeverage: 470n,
   kycRegistrationLink: 'https://form.typeform.com/to/DqZaw6kr',
+  strategyName: 'mGLOBAL',
+  targetSymbol: 'mGLOBAL',
 }
 
 function loadedOpportunity(
@@ -115,11 +127,11 @@ describe('App — loading failures', () => {
 })
 
 describe('App — RWA opportunities', () => {
-  it('lists RWA opportunities without filtering them out via the negative-APY rule', async () => {
+  it('lists RWA opportunities without filtering them out via the negative-APY rule, labelled by target symbol', async () => {
     const { App } = await import('./App')
     render(<App />)
 
-    const frxUsdTabs = await screen.findAllByRole('tab', { name: /frxusd/i })
-    expect(frxUsdTabs).toHaveLength(2)
+    expect(await screen.findByRole('tab', { name: /mf-one/i })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /mglobal/i })).toBeInTheDocument()
   })
 })

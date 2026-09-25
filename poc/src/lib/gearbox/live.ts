@@ -1,8 +1,8 @@
 import type { StrategyOpportunity } from '@gearbox-protocol/sdk/model'
+import { GearboxAPI } from '@gearbox-protocol/sdk/offchain'
 import { BOT_PARTIAL_LIQUIDATION, BotsPlugin } from '@gearbox-protocol/sdk/plugins/bots'
 import { OnchainSDK, calcNetStrategyApy } from '@gearbox-protocol/sdk/onchain'
 import type { Address } from 'viem'
-import { fetchCollateralApys } from './apyFeed'
 import {
   calculateLeverageForTargetHealthFactor,
   calculateMinimumCollateralForDebt,
@@ -14,38 +14,34 @@ export const DEFAULT_SLIPPAGE_BPS = 50
 export const DEFAULT_QUOTA_RESERVE_BPS = 500n
 export const TARGET_HEALTH_FACTOR_BPS = 10_400n
 export const TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS = 15n
-export const DEFAULT_GEARBOX_APY_URL = '/gearbox-apy/latest.json'
 export const MAINNET_RPC_URL = import.meta.env.VITE_MAINNET_RPC_URL || 'https://ethereum-rpc.publicnode.com'
 export const MAINNET_STRATEGY_ID = 'wmooCurveETH+-WETH'
-export const GEARBOX_APY_URL = resolveGearboxApyUrl(import.meta.env.VITE_GEARBOX_APY_URL)
+export const GEARBOX_API_URL = import.meta.env.VITE_GEARBOX_API_URL || 'https://api.gearbox.foundation'
+
+export const gearboxApi = new GearboxAPI({ baseUrl: GEARBOX_API_URL, chainIds: [MAINNET_CHAIN_ID] })
 
 const ETH_YIELD_TARGET_TOKEN = '0x02a4cceed3c400b5ba9fd22ad6ec18d8f7a3d48e' as Address
 const MF_ONE_TARGET_TOKEN = '0x238a700eD6165261Cf8b2e544ba797BC11e466Ba' as Address
 const MGLOBAL_TARGET_TOKEN = '0x7433806912Eae67919e66aea853d46Fa0aef98A8' as Address
 
+export type CollateralApySource = 'backend' | 'nav'
+
 interface AllowlistedTarget {
   targetToken: Address
   strategyId: string
+  collateralApySource: CollateralApySource
 }
 
 const ALLOWLISTED_TARGETS: AllowlistedTarget[] = [
-  { targetToken: ETH_YIELD_TARGET_TOKEN, strategyId: MAINNET_STRATEGY_ID },
-  { targetToken: MF_ONE_TARGET_TOKEN, strategyId: 'mF-ONE' },
-  { targetToken: MGLOBAL_TARGET_TOKEN, strategyId: 'mGLOBAL' },
+  { targetToken: ETH_YIELD_TARGET_TOKEN, strategyId: MAINNET_STRATEGY_ID, collateralApySource: 'backend' },
+  // Both Midas RWAs price their collateral off a monthly/near-daily NAV
+  // oracle rather than a market rate; the backend's collateralApy annualizes
+  // that oracle over too short a window to be meaningful (seen as high as
+  // 145%). Derive it on-chain from the NAV feed instead — see
+  // calculateNavApyBps / fetchNavRounds.
+  { targetToken: MF_ONE_TARGET_TOKEN, strategyId: 'mF-ONE', collateralApySource: 'nav' },
+  { targetToken: MGLOBAL_TARGET_TOKEN, strategyId: 'mGLOBAL', collateralApySource: 'nav' },
 ]
-
-export function resolveGearboxApyUrl(url: string | undefined): string {
-  if (!url) return DEFAULT_GEARBOX_APY_URL
-  if (url.startsWith('/gearbox-apy/')) return url
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
-      ? parsed.toString()
-      : DEFAULT_GEARBOX_APY_URL
-  } catch {
-    return DEFAULT_GEARBOX_APY_URL
-  }
-}
 
 /**
  * Subset of `StrategyOpportunity` (from `@gearbox-protocol/sdk/model`) that
@@ -57,6 +53,7 @@ export interface StrategyOpportunityLike {
   targetCollateral: { address: Address; symbol: string; decimals: number }
   underlyingToken: { address: Address; symbol: string; decimals: number }
   name: string
+  curator: { name?: string }
   rwa: boolean
   sunset: boolean
   paused: boolean
@@ -106,12 +103,25 @@ export interface GearboxCreditManagerRoute {
   collateralDecimals: number
   rwa: boolean
   kycRegistrationLink?: string
+  /** On-chain opportunity name, e.g. "ETH+ / wstETH" — one per credit manager. */
+  strategyName: string
+  /** Symbol of the collateral the position is built around (e.g. mF-ONE), for display headings — never the deposit token. */
+  targetSymbol: string
+  /** On-chain curator name (e.g. "KPK"), or a generic fallback when unknown. */
+  curator: string
+  liquidationThresholdBps: number
+  collateralApySource: CollateralApySource
 }
 
 let cachedOpportunities: Promise<LoadedGearboxOpportunity[]> | undefined
 
 export function resetGearboxOpportunityCache() {
   cachedOpportunities = undefined
+}
+
+export interface BuildRouteOptions {
+  kycRegistrationLink?: string
+  collateralApySource?: CollateralApySource
 }
 
 /**
@@ -126,7 +136,7 @@ export function resetGearboxOpportunityCache() {
 export function buildCreditManagerRoute(
   opportunity: StrategyOpportunityLike,
   collateralApyBps: number | undefined,
-  kycRegistrationLink?: string,
+  { kycRegistrationLink, collateralApySource = 'backend' }: BuildRouteOptions = {},
 ): GearboxCreditManagerRoute {
   const maxLeverage = calculateLeverageForTargetHealthFactor({
     liquidationThresholdBps: BigInt(opportunity.liquidationThreshold),
@@ -166,6 +176,11 @@ export function buildCreditManagerRoute(
     collateralDecimals: opportunity.underlyingToken.decimals,
     rwa: opportunity.rwa,
     kycRegistrationLink,
+    strategyName: opportunity.name,
+    targetSymbol: opportunity.targetCollateral.symbol,
+    curator: opportunity.curator.name ?? 'Gearbox',
+    liquidationThresholdBps: opportunity.liquidationThreshold,
+    collateralApySource,
   }
 }
 
@@ -212,6 +227,214 @@ export async function checkStrategyEligibility(
   return sdk.opportunities.isEligibleForStrategy({ chainId: MAINNET_CHAIN_ID, creditManager }, wallet)
 }
 
+/** One Chainlink-style aggregator round: whole-unit NAV price and its update time (unix seconds). */
+export interface NavRound {
+  price: number
+  updatedAt: number
+}
+
+const YEAR_SECONDS = 365 * 24 * 60 * 60
+const NAV_MIN_BASELINE_AGE_SECONDS = 90 * 24 * 60 * 60
+const NAV_MIN_SPAN_SECONDS = 30 * 24 * 60 * 60
+
+/**
+ * Current collateral APY for a NAV-priced RWA target (mF-ONE, mGLOBAL):
+ * compound-annualized NAV growth over a trailing ~90-day window. `rounds`
+ * must be ordered oldest-first (ascending `updatedAt`), as read from the
+ * aggregator. Walks backward from the round just before the latest one for
+ * the first (closest to latest) round at least 90 days old; if none of the
+ * given rounds reach that age, falls back to the oldest one given. Returns
+ * undefined when fewer than two usable rounds are given, or the resulting
+ * span is under 30 days — too short to annualize responsibly.
+ */
+export function calculateNavApyBps(rounds: readonly NavRound[], nowSeconds: number): number | undefined {
+  const usable = rounds.filter(round => round.price > 0)
+  if (usable.length < 2) return undefined
+
+  const latest = usable[usable.length - 1]
+  const cutoff = nowSeconds - NAV_MIN_BASELINE_AGE_SECONDS
+  let baseline: NavRound | undefined
+  for (let i = usable.length - 2; i >= 0; i--) {
+    if (usable[i].updatedAt <= cutoff) {
+      baseline = usable[i]
+      break
+    }
+  }
+  baseline ??= usable[0]
+
+  const spanSeconds = latest.updatedAt - baseline.updatedAt
+  if (spanSeconds < NAV_MIN_SPAN_SECONDS) return undefined
+
+  const years = spanSeconds / YEAR_SECONDS
+  const rate = Math.pow(latest.price / baseline.price, 1 / years) - 1
+  return Math.round(rate * 10_000)
+}
+
+/** Annualized NAV growth of one segment between two consecutive rounds, for the strategy back-test's collateral-apy history. */
+export interface NavApySegment {
+  /** End of the segment (the later round's `updatedAt`), seconds. */
+  timestamp: number
+  apyBps: number
+}
+
+/**
+ * Builds one segment per consecutive pair of NAV rounds (oldest-first),
+ * each annualizing that pair's growth with compounding. A segment whose
+ * price did not change (e.g. mGLOBAL's pre-launch rounds) is exactly 0%,
+ * not a tiny floating-point artifact. Pure — rounds already read on-chain.
+ */
+export function buildNavApySegments(rounds: readonly NavRound[]): NavApySegment[] {
+  const usable = rounds.filter(round => round.price > 0)
+  const segments: NavApySegment[] = []
+
+  for (let i = 1; i < usable.length; i++) {
+    const previous = usable[i - 1]
+    const current = usable[i]
+    const spanSeconds = current.updatedAt - previous.updatedAt
+    if (spanSeconds <= 0) continue
+
+    const apyBps = current.price === previous.price
+      ? 0
+      : Math.round((Math.pow(current.price / previous.price, YEAR_SECONDS / spanSeconds) - 1) * 10_000)
+    segments.push({ timestamp: current.updatedAt, apyBps })
+  }
+
+  return segments
+}
+
+const NAV_AGGREGATOR_ABI = [
+  {
+    type: 'function',
+    name: 'decimals',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint8' }],
+  },
+  {
+    type: 'function',
+    name: 'latestRoundData',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'roundId', type: 'uint80' },
+      { name: 'answer', type: 'int256' },
+      { name: 'startedAt', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
+      { name: 'answeredInRound', type: 'uint80' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'getRoundData',
+    stateMutability: 'view',
+    inputs: [{ name: '_roundId', type: 'uint80' }],
+    outputs: [
+      { name: 'roundId', type: 'uint80' },
+      { name: 'answer', type: 'int256' },
+      { name: 'startedAt', type: 'uint256' },
+      { name: 'updatedAt', type: 'uint256' },
+      { name: 'answeredInRound', type: 'uint80' },
+    ],
+  },
+] as const
+
+const NAV_HISTORY_MAX_ROUNDS = 500
+const NAV_HISTORY_BATCH_SIZE = 50
+const NAV_HISTORY_MAX_AGE_SECONDS = YEAR_SECONDS
+
+/**
+ * Reads a NAV price feed's rounds back at least one year (or to round 1),
+ * capped at 500 reads, batched via multicall. Returns oldest-first — ready
+ * for both `calculateNavApyBps` and `buildNavApySegments` — or undefined
+ * when the credit manager has no configured feed for `targetToken` or any
+ * read fails.
+ */
+export async function fetchNavRounds(
+  sdk: OnchainSDK,
+  creditManager: Address,
+  targetToken: Address,
+): Promise<NavRound[] | undefined> {
+  try {
+    const feed = sdk.marketRegister.findCreditManager(creditManager).market.priceOracle.mainPriceFeeds.get(targetToken)
+    if (!feed) return undefined
+
+    const decimals = await sdk.client.readContract({
+      address: feed.address,
+      abi: NAV_AGGREGATOR_ABI,
+      functionName: 'decimals',
+    })
+    const scale = 10 ** decimals
+
+    const latest = await sdk.client.readContract({
+      address: feed.address,
+      abi: NAV_AGGREGATOR_ABI,
+      functionName: 'latestRoundData',
+    })
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const roundsNewestFirst: NavRound[] = [{ price: Number(latest[1]) / scale, updatedAt: Number(latest[3]) }]
+
+    let nextRoundId = latest[0] - 1n
+    while (
+      roundsNewestFirst.length < NAV_HISTORY_MAX_ROUNDS &&
+      nextRoundId > 0n &&
+      nowSeconds - roundsNewestFirst[roundsNewestFirst.length - 1].updatedAt < NAV_HISTORY_MAX_AGE_SECONDS
+    ) {
+      const batchIds: bigint[] = []
+      for (
+        let i = 0;
+        i < NAV_HISTORY_BATCH_SIZE && nextRoundId > 0n && roundsNewestFirst.length + batchIds.length < NAV_HISTORY_MAX_ROUNDS;
+        i++
+      ) {
+        batchIds.push(nextRoundId)
+        nextRoundId -= 1n
+      }
+
+      const results = await sdk.client.multicall({
+        contracts: batchIds.map(roundId => ({
+          address: feed.address,
+          abi: NAV_AGGREGATOR_ABI,
+          functionName: 'getRoundData',
+          args: [roundId],
+        } as const)),
+      })
+
+      for (const result of results) {
+        if (result.status !== 'success') continue
+        const [, answer, , updatedAt] = result.result
+        roundsNewestFirst.push({ price: Number(answer) / scale, updatedAt: Number(updatedAt) })
+      }
+    }
+
+    return roundsNewestFirst.reverse()
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Collateral APY per credit manager from the Gearbox backend (`totalApy`,
+ * fee-incl. Bps). Keyed by credit manager rather than target token: the
+ * backend correctly gives each route its own value (e.g. a WETH ETH+ route
+ * differs from its wstETH sibling), unlike the flat state-cache feed this
+ * replaced. Any failure resolves to an empty map — apy renders as "n/a"
+ * rather than throwing.
+ */
+async function fetchCollateralApysByCreditManager(): Promise<Map<Address, number>> {
+  const result = new Map<Address, number>()
+  try {
+    const response = await gearboxApi.opportunities.list({ kind: 'strategy' })
+    for (const opp of response.data) {
+      if (opp.kind !== 'strategy') continue
+      const totalApy = opp.collateralApy?.totalApy
+      if (totalApy === undefined || totalApy === null) continue
+      result.set(opp.creditManager.toLowerCase() as Address, totalApy)
+    }
+  } catch {
+    // empty map — collateral apy renders as "n/a", never throws
+  }
+  return result
+}
+
 function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]> {
   return (async () => {
     const bots = new BotsPlugin(true)
@@ -233,7 +456,7 @@ function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]>
       ? (bots.bots.find(bot => bot.contractType === BOT_PARTIAL_LIQUIDATION)?.address as Address | undefined)
       : undefined
 
-    const collateralApys = await fetchCollateralApys(GEARBOX_APY_URL, MAINNET_CHAIN_ID)
+    const collateralApysByCm = await fetchCollateralApysByCreditManager()
     const allOpportunities = await sdk.opportunities.list({ kind: 'strategy' })
 
     const results: LoadedGearboxOpportunity[] = []
@@ -250,14 +473,14 @@ function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]>
 
       const routes = await Promise.all(
         liveOpportunities.map(async opp => {
-          const collateralApyBps = collateralApys.get(target.targetToken.toLowerCase() as Address)
           const kycRegistrationLink = opp.rwa
             ? await sdk.opportunities
                 .getStrategy({ chainId: MAINNET_CHAIN_ID, creditManager: opp.creditManager })
                 .then(detail => detail.kyc?.registrationLink)
                 .catch(() => undefined)
             : undefined
-          return buildCreditManagerRoute(opp, collateralApyBps, kycRegistrationLink)
+          const collateralApyBps = collateralApysByCm.get(opp.creditManager.toLowerCase() as Address)
+          return buildCreditManagerRoute(opp, collateralApyBps, { kycRegistrationLink })
         }),
       )
 

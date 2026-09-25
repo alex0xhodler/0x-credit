@@ -3,13 +3,14 @@ import type { Address } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { calculateLeverageForTargetHealthFactor, calculateMinimumCollateralForDebt } from './plan'
 import {
-  GEARBOX_APY_URL,
   TARGET_HEALTH_FACTOR_BPS,
   TARGET_HEALTH_FACTOR_EXECUTION_BUFFER_BPS,
   buildCreditManagerRoute,
-  resolveGearboxApyUrl,
+  buildNavApySegments,
+  calculateNavApyBps,
   selectBestCreditManagerForAmount,
   type GearboxCreditManagerRoute,
+  type NavRound,
   type StrategyOpportunityLike,
 } from './live'
 
@@ -25,6 +26,7 @@ function ethOpportunity(overrides: Partial<StrategyOpportunityLike> = {}): Strat
     targetCollateral: { address: TARGET, symbol: 'wmooCurveETH+-WETH', decimals: 18 },
     underlyingToken: { address: WETH, symbol: 'WETH', decimals: 18 },
     name: 'ETH+ / WETH',
+    curator: { name: 'KPK' },
     rwa: false,
     sunset: false,
     paused: false,
@@ -63,28 +65,15 @@ function cm(overrides: {
     collateralSymbol: 'USDC',
     collateralDecimals: 6,
     rwa: false,
+    strategyName: 'test strategy',
+    targetSymbol: 'TEST',
+    curator: 'KPK',
+    liquidationThresholdBps: 9000,
+    collateralApySource: 'backend',
   }
 }
 
 describe('Gearbox live opportunity selection', () => {
-  it('uses the hosted Gearbox APY snapshot when no Vite override is configured', () => {
-    expect(GEARBOX_APY_URL).toBe('/gearbox-apy/latest.json')
-  })
-
-  it('keeps the same-origin APY proxy path', () => {
-    expect(resolveGearboxApyUrl('/gearbox-apy/latest.json')).toBe(
-      '/gearbox-apy/latest.json',
-    )
-  })
-
-  it('ignores unsupported relative APY overrides', () => {
-    expect(resolveGearboxApyUrl('/other/latest.json')).toBe('/gearbox-apy/latest.json')
-  })
-
-  it('keeps absolute APY overrides when explicitly configured', () => {
-    expect(resolveGearboxApyUrl('https://example.com/latest.json')).toBe('https://example.com/latest.json')
-  })
-
   it('uses the lower-min-debt credit manager when the better-APY route is incompatible', () => {
     const highMin = '0x0000000000000000000000000000000000000001' as Address
     const lowMin = '0x0000000000000000000000000000000000000002' as Address
@@ -156,7 +145,7 @@ describe('buildCreditManagerRoute', () => {
   })
 
   it('passes through the kyc registration link when provided', () => {
-    const route = buildCreditManagerRoute(ethOpportunity(), undefined, 'https://form.typeform.com/to/DqZaw6kr')
+    const route = buildCreditManagerRoute(ethOpportunity(), undefined, { kycRegistrationLink: 'https://form.typeform.com/to/DqZaw6kr' })
     expect(route.kycRegistrationLink).toBe('https://form.typeform.com/to/DqZaw6kr')
   })
 
@@ -174,5 +163,105 @@ describe('buildCreditManagerRoute', () => {
     expect(route.collateralSymbol).toBe('frxUSD')
     expect(route.collateralDecimals).toBe(18)
     expect(route.rwa).toBe(true)
+  })
+
+  it('carries the on-chain name, target symbol, curator and liquidation threshold per route', () => {
+    const opportunity = ethOpportunity({
+      name: 'ETH+ / wstETH',
+      targetCollateral: { address: TARGET, symbol: 'wmooCurveETH+-WETH', decimals: 18 },
+      curator: { name: 'KPK' },
+      liquidationThreshold: 9000,
+    })
+
+    const route = buildCreditManagerRoute(opportunity, undefined)
+
+    expect(route.strategyName).toBe('ETH+ / wstETH')
+    expect(route.targetSymbol).toBe('wmooCurveETH+-WETH')
+    expect(route.curator).toBe('KPK')
+    expect(route.liquidationThresholdBps).toBe(9000)
+  })
+
+  it('falls back to a generic curator label when the on-chain curator name is unknown', () => {
+    const route = buildCreditManagerRoute(ethOpportunity({ curator: {} }), undefined)
+    expect(route.curator).toBe('Gearbox')
+  })
+
+  it('defaults collateralApySource to backend, and carries an explicit nav source through', () => {
+    expect(buildCreditManagerRoute(ethOpportunity(), undefined).collateralApySource).toBe('backend')
+    expect(buildCreditManagerRoute(ethOpportunity(), undefined, { collateralApySource: 'nav' }).collateralApySource).toBe('nav')
+  })
+})
+
+// Real mGLOBAL Midas NAV price feed rounds (8-decimal Chainlink-style feed),
+// oldest-first as calculateNavApyBps/buildNavApySegments require.
+const MGLOBAL_ROUND_1: NavRound = { price: 1.0, updatedAt: Date.UTC(2026, 3, 5) / 1000 }
+const MGLOBAL_ROUND_2: NavRound = { price: 1.0, updatedAt: Date.UTC(2026, 4, 15) / 1000 }
+const MGLOBAL_ROUND_3: NavRound = { price: 1.00576480, updatedAt: Date.UTC(2026, 5, 29) / 1000 }
+const MGLOBAL_ROUND_4: NavRound = { price: 1.01128145, updatedAt: Date.UTC(2026, 6, 23) / 1000 }
+const MGLOBAL_ROUND_5: NavRound = { price: 1.01664609, updatedAt: Date.UTC(2026, 7, 20) / 1000 }
+const MGLOBAL_ROUND_6: NavRound = { price: 1.02200873, updatedAt: Date.UTC(2026, 8, 23) / 1000 }
+const MGLOBAL_ROUND_7: NavRound = { price: 1.02241277, updatedAt: Date.UTC(2026, 8, 24) / 1000 }
+const MGLOBAL_ROUNDS = [
+  MGLOBAL_ROUND_1, MGLOBAL_ROUND_2, MGLOBAL_ROUND_3, MGLOBAL_ROUND_4, MGLOBAL_ROUND_5, MGLOBAL_ROUND_6, MGLOBAL_ROUND_7,
+]
+const DAY = 86_400
+
+describe('calculateNavApyBps', () => {
+  it('walks back past rounds within 90 days of latest to the first one old enough (mGLOBAL: lands on round 2, ~6.3%)', () => {
+    const bps = calculateNavApyBps(MGLOBAL_ROUNDS, MGLOBAL_ROUND_7.updatedAt)
+    expect(bps).toBeDefined()
+    expect(bps! / 100).toBeCloseTo(6.3, 0)
+  })
+
+  it('falls back to the oldest round given when none clear the 90-day cutoff, still requiring a 30-day span', () => {
+    const now = MGLOBAL_ROUND_7.updatedAt
+    // round5 -> round7 is ~35 days: below the 90-day baseline age, but above
+    // the 30-day minimum span, so it computes off round5 (the oldest given).
+    const bps = calculateNavApyBps([MGLOBAL_ROUND_5, MGLOBAL_ROUND_6, MGLOBAL_ROUND_7], now)
+    expect(bps).toBeDefined()
+    // round6 -> round7 alone is only 1 day — below the 30-day minimum span.
+    expect(calculateNavApyBps([MGLOBAL_ROUND_6, MGLOBAL_ROUND_7], now)).toBeUndefined()
+  })
+
+  it('returns undefined when the reachable span is below 30 days', () => {
+    const now = MGLOBAL_ROUND_7.updatedAt
+    const tooRecent: NavRound = { price: 1.021, updatedAt: now - 14 * DAY }
+    expect(calculateNavApyBps([tooRecent, MGLOBAL_ROUND_7], now)).toBeUndefined()
+  })
+
+  it('returns undefined with fewer than two usable rounds', () => {
+    expect(calculateNavApyBps([], MGLOBAL_ROUND_7.updatedAt)).toBeUndefined()
+    expect(calculateNavApyBps([MGLOBAL_ROUND_7], MGLOBAL_ROUND_7.updatedAt)).toBeUndefined()
+  })
+
+  it('returns undefined when the latest price is not positive', () => {
+    expect(calculateNavApyBps([MGLOBAL_ROUND_1, { price: 0, updatedAt: MGLOBAL_ROUND_7.updatedAt }], MGLOBAL_ROUND_7.updatedAt)).toBeUndefined()
+  })
+})
+
+describe('buildNavApySegments', () => {
+  it('gives the pre-launch flat segment exactly 0%, not a floating-point artifact', () => {
+    const segments = buildNavApySegments([MGLOBAL_ROUND_1, MGLOBAL_ROUND_2])
+    expect(segments).toEqual([{ timestamp: MGLOBAL_ROUND_2.updatedAt, apyBps: 0 }])
+  })
+
+  it('annualizes each real growth segment with compounding (round6 -> round7 is a short, noisy span)', () => {
+    const segments = buildNavApySegments([MGLOBAL_ROUND_6, MGLOBAL_ROUND_7])
+    expect(segments).toHaveLength(1)
+    expect(segments[0].timestamp).toBe(MGLOBAL_ROUND_7.updatedAt)
+    // 1 day apart at ~0.04% growth compounds to an extreme annualized figure —
+    // this is expected of short spans, not a bug in the formula.
+    expect(segments[0].apyBps).toBeGreaterThan(0)
+  })
+
+  it('produces one segment per consecutive pair, in order, covering the whole history', () => {
+    const segments = buildNavApySegments(MGLOBAL_ROUNDS)
+    expect(segments).toHaveLength(MGLOBAL_ROUNDS.length - 1)
+    expect(segments.map(s => s.timestamp)).toEqual(MGLOBAL_ROUNDS.slice(1).map(r => r.updatedAt))
+  })
+
+  it('drops non-positive-price rounds rather than producing a nonsensical segment', () => {
+    const segments = buildNavApySegments([MGLOBAL_ROUND_1, { price: 0, updatedAt: MGLOBAL_ROUND_1.updatedAt + DAY }, MGLOBAL_ROUND_2])
+    expect(segments).toEqual([{ timestamp: MGLOBAL_ROUND_2.updatedAt, apyBps: 0 }])
   })
 })
