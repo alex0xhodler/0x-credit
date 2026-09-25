@@ -284,16 +284,26 @@ export function calculateNavApyBps(rounds: readonly NavRound[], nowSeconds: numb
 
 /** Annualized NAV growth of one segment between two consecutive rounds, for the strategy back-test's collateral-apy history. */
 export interface NavApySegment {
-  /** End of the segment (the later round's `updatedAt`), seconds. */
+  /**
+   * START of the segment (the earlier round's `updatedAt`), seconds — not
+   * the end. The back-test applies this rate going forward from here until
+   * the next segment's timestamp, so anchoring at the end would apply each
+   * segment's growth to the WRONG window (the one after it, not the one it
+   * measured).
+   */
   timestamp: number
   apyBps: number
 }
 
 /**
  * Builds one segment per consecutive pair of NAV rounds (oldest-first),
- * each annualizing that pair's growth with compounding. A segment whose
- * price did not change (e.g. mGLOBAL's pre-launch rounds) is exactly 0%,
- * not a tiny floating-point artifact. Pure — rounds already read on-chain.
+ * each annualizing that pair's growth with compounding, anchored at the
+ * segment's start round. Leading segments with no growth at all (e.g.
+ * mGLOBAL's rounds before the token started accruing) are trimmed —
+ * history starts at the first round where the NAV actually begins to
+ * move, never a flat pre-launch placeholder; an interior flat segment
+ * (after accrual has started) is kept as a real 0%. Pure — rounds already
+ * read on-chain.
  */
 export function buildNavApySegments(rounds: readonly NavRound[]): NavApySegment[] {
   const usable = rounds.filter(round => round.price > 0)
@@ -308,10 +318,11 @@ export function buildNavApySegments(rounds: readonly NavRound[]): NavApySegment[
     const apyBps = current.price === previous.price
       ? 0
       : Math.round((Math.pow(current.price / previous.price, YEAR_SECONDS / spanSeconds) - 1) * 10_000)
-    segments.push({ timestamp: current.updatedAt, apyBps })
+    segments.push({ timestamp: previous.updatedAt, apyBps })
   }
 
-  return segments
+  const firstGrowthIndex = segments.findIndex(segment => segment.apyBps !== 0)
+  return firstGrowthIndex === -1 ? [] : segments.slice(firstGrowthIndex)
 }
 
 const NAV_AGGREGATOR_ABI = [

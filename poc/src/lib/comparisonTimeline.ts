@@ -49,10 +49,14 @@ export function buildBalanceTimeline({
     historicalRates.set(benchmark.id, ratesFromHistory(benchmark.history))
   }
 
+  // Both series start undefined: a route's history can begin partway through
+  // the window (e.g. a NAV feed's pre-launch rounds are trimmed out — see
+  // buildNavApySegments), and the chart must show no line at all before that
+  // first real data point, never a flat placeholder back to the left edge.
   const balances: Record<'strategy' | 'weth' | YieldBenchmark['id'], number | undefined> = {
-    strategy: historicalRates.has('strategy') ? startingBalance : undefined,
+    strategy: undefined,
     weth: startingBalance,
-    lst: historicalRates.has('lst') ? startingBalance : undefined,
+    lst: undefined,
   }
   const latestRates = new Map<'strategy' | YieldBenchmark['id'], number>()
   const points: BalanceTimelinePoint[] = []
@@ -60,8 +64,13 @@ export function buildBalanceTimeline({
   for (let time = -spanDays; time <= 0; time++) {
     for (const [key, rates] of historicalRates) {
       const rate = rates.get(time)
+      const isFirstObservation = rate !== undefined && !latestRates.has(key)
       if (rate !== undefined) latestRates.set(key, rate)
-      if (time > -spanDays && balances[key] !== undefined && latestRates.has(key)) {
+
+      if (isFirstObservation) {
+        // The series starts here, at its own baseline — not compounded yet.
+        balances[key] = startingBalance
+      } else if (balances[key] !== undefined && latestRates.has(key)) {
         balances[key] = balances[key]! * Math.pow(1 + latestRates.get(key)! / 100, 1 / 365)
       }
     }

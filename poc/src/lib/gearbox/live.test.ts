@@ -240,28 +240,44 @@ describe('calculateNavApyBps', () => {
 })
 
 describe('buildNavApySegments', () => {
-  it('gives the pre-launch flat segment exactly 0%, not a floating-point artifact', () => {
-    const segments = buildNavApySegments([MGLOBAL_ROUND_1, MGLOBAL_ROUND_2])
-    expect(segments).toEqual([{ timestamp: MGLOBAL_ROUND_2.updatedAt, apyBps: 0 }])
-  })
-
-  it('annualizes each real growth segment with compounding (round6 -> round7 is a short, noisy span)', () => {
+  it('is anchored at each segment\'s START round, not its end — the rate applies forward from there', () => {
     const segments = buildNavApySegments([MGLOBAL_ROUND_6, MGLOBAL_ROUND_7])
     expect(segments).toHaveLength(1)
-    expect(segments[0].timestamp).toBe(MGLOBAL_ROUND_7.updatedAt)
+    expect(segments[0].timestamp).toBe(MGLOBAL_ROUND_6.updatedAt)
     // 1 day apart at ~0.04% growth compounds to an extreme annualized figure —
     // this is expected of short spans, not a bug in the formula.
     expect(segments[0].apyBps).toBeGreaterThan(0)
   })
 
-  it('produces one segment per consecutive pair, in order, covering the whole history', () => {
+  it('trims leading pre-launch flat segments — history starts at the first real growth (mGLOBAL: round2 -> round3, 2026-05-15)', () => {
     const segments = buildNavApySegments(MGLOBAL_ROUNDS)
-    expect(segments).toHaveLength(MGLOBAL_ROUNDS.length - 1)
-    expect(segments.map(s => s.timestamp)).toEqual(MGLOBAL_ROUNDS.slice(1).map(r => r.updatedAt))
+    expect(segments[0].timestamp).toBe(MGLOBAL_ROUND_2.updatedAt)
+    expect(new Date(segments[0].timestamp * 1000).toISOString().slice(0, 10)).toBe('2026-05-15')
+    expect(segments.every(s => s.timestamp >= MGLOBAL_ROUND_2.updatedAt)).toBe(true)
+  })
+
+  it('keeps an interior flat segment (after accrual has already started) rather than trimming it too', () => {
+    const flatInterior: NavRound = { price: MGLOBAL_ROUND_3.price, updatedAt: MGLOBAL_ROUND_3.updatedAt + DAY }
+    const segments = buildNavApySegments([MGLOBAL_ROUND_2, MGLOBAL_ROUND_3, flatInterior, MGLOBAL_ROUND_4])
+    expect(segments.map(s => s.apyBps)).toEqual([
+      segments[0].apyBps, // round2 -> round3: real growth
+      0,                  // round3 -> flatInterior: no change, but AFTER accrual started — kept
+      segments[2].apyBps, // flatInterior -> round4: real growth
+    ])
+  })
+
+  it('returns no segments when the given rounds never show any growth', () => {
+    expect(buildNavApySegments([MGLOBAL_ROUND_1, MGLOBAL_ROUND_2])).toEqual([])
+  })
+
+  it('produces one segment per consecutive pair after trimming, in order', () => {
+    const segments = buildNavApySegments(MGLOBAL_ROUNDS)
+    expect(segments).toHaveLength(MGLOBAL_ROUNDS.length - 2) // one fewer: the leading flat segment is trimmed
+    expect(segments.map(s => s.timestamp)).toEqual(MGLOBAL_ROUNDS.slice(1, -1).map(r => r.updatedAt))
   })
 
   it('drops non-positive-price rounds rather than producing a nonsensical segment', () => {
     const segments = buildNavApySegments([MGLOBAL_ROUND_1, { price: 0, updatedAt: MGLOBAL_ROUND_1.updatedAt + DAY }, MGLOBAL_ROUND_2])
-    expect(segments).toEqual([{ timestamp: MGLOBAL_ROUND_2.updatedAt, apyBps: 0 }])
+    expect(segments).toEqual([])
   })
 })

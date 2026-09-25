@@ -39,7 +39,8 @@ describe('buildBalanceTimeline — strategy history', () => {
     const dayMinus1 = points.find(p => p.time === -1)!
     const dayZero = points.find(p => p.time === 0)!
 
-    expect(dayMinus2.strategy).toBeGreaterThan(100)
+    // Day -2 is the first history point: it's the baseline, not yet compounded.
+    expect(dayMinus2.strategy).toBe(100)
     expect(dayMinus1.strategy).toBeGreaterThan(dayMinus2.strategy!)
     expect(dayZero.strategy).toBeGreaterThan(dayMinus1.strategy!)
   })
@@ -77,6 +78,28 @@ describe('buildBalanceTimeline — strategy history', () => {
 
     expect(past.every(p => p.strategy === undefined)).toBe(true)
     expect(future.every(p => typeof p.strategy === 'number')).toBe(true)
+  })
+
+  it('has no strategy points before the first history timestamp when history starts partway through the window (e.g. a NAV feed trimmed of its pre-launch rounds)', () => {
+    const points = buildBalanceTimeline({
+      startingBalance: 100,
+      horizon: 6, // 180-day span
+      strategyApyPercent: 50,
+      strategyHistory: [
+        { timestamp: isoDaysAgo(5), apy: 36.5 },
+        { timestamp: isoDaysAgo(3), apy: 36.5 },
+      ],
+      benchmarks: [],
+      now: NOW,
+    })
+
+    const before = points.filter(p => p.time < -5)
+    const from = points.filter(p => p.time >= -5 && p.time <= 0)
+
+    expect(before.every(p => p.strategy === undefined)).toBe(true)
+    expect(from.every(p => typeof p.strategy === 'number')).toBe(true)
+    // The first point is the baseline — no pre-history compounding leaked in.
+    expect(points.find(p => p.time === -5)!.strategy).toBe(100)
   })
 
   it('defines the strategy balance exactly at Now (time 0), not just from the first future step', () => {
