@@ -9,11 +9,6 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/gearbox-apy': {
-        target: 'https://state-cache.gearbox.foundation',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/gearbox-apy/, '/apy-server'),
-      },
       '/t54-api': {
         target: 'https://api.trustline.t54.ai',
         changeOrigin: true,
