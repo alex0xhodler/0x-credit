@@ -291,7 +291,10 @@ function loadMainnetOpportunitiesUncached(): Promise<LoadedGearboxOpportunity[]>
 
 export function loadMainnetOpportunities(): Promise<LoadedGearboxOpportunity[]> {
   if (!cachedOpportunities) {
-    cachedOpportunities = loadMainnetOpportunitiesUncached()
+    cachedOpportunities = loadMainnetOpportunitiesUncached().catch((error: unknown) => {
+      cachedOpportunities = undefined
+      throw error
+    })
   }
   return cachedOpportunities
 }

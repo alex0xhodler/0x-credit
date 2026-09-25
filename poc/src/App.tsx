@@ -183,7 +183,7 @@ function GearboxApp() {
 
   const [amount, setAmount] = useState('')
   const [mainnetOpportunities, setMainnetOpportunities] = useState<LoadedGearboxOpportunity[]>([])
-  const [loadError] = useState<string>()
+  const [loadError, setLoadError] = useState<string>()
   const [executionError, setExecutionError] = useState<string>()
   const [isExecuting, setIsExecuting] = useState(false)
   const [steps, setSteps] = useState<ExecutionStep[]>([])
@@ -344,6 +344,7 @@ function GearboxApp() {
       })
       .catch((error: unknown) => {
         console.warn('Failed to load Mainnet opportunities:', error)
+        if (!cancelled) setLoadError("Couldn't load strategies from Ethereum. Reload the page to try again.")
       })
 
     return () => {

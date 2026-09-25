@@ -103,6 +103,17 @@ describe('App — routing', () => {
   })
 })
 
+describe('App — loading failures', () => {
+  it('tells the user when mainnet strategies cannot be loaded', async () => {
+    const live = await import('./lib/gearbox/live')
+    vi.mocked(live.loadMainnetOpportunities).mockRejectedValueOnce(new Error('getMarkets reverted'))
+    const { App } = await import('./App')
+    render(<App />)
+
+    expect(await screen.findByText(/couldn't load strategies from ethereum/i)).toBeInTheDocument()
+  })
+})
+
 describe('App — RWA opportunities', () => {
   it('lists RWA opportunities without filtering them out via the negative-APY rule', async () => {
     const { App } = await import('./App')

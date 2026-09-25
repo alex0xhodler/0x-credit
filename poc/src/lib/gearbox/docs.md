@@ -58,6 +58,6 @@ Path: @/poc/src/lib/gearbox
 - RWA strategies accept only their underlying (frxUSD) as deposit, even though the SDK lists other allowed deposit tokens. Exits are delayed Midas redemptions and are managed on the Gearbox dashboard; the cockpit has no exit flow.
 - Midas greenlisting of the credit account is added automatically by `openCA` through the credit suite's opening calls; the wallet-level check is `sdk.opportunities.isEligibleForStrategy`.
 - `prepareOpenStrategyTx` takes a structural SDK type built from the real SDK types, and `App.tsx` passes the attached `OnchainSDK` without a cast, so `tsc -b` (run by `npm test`) fails if SDK transaction shapes change.
-- The opportunity cache is module-level and lives for the page; `resetGearboxOpportunityCache()` exists for tests.
+- The opportunity cache is module-level and lives for the page; a failed load is not cached, and `App.tsx` shows a load error instead of leaving the cockpit in its loading state. `resetGearboxOpportunityCache()` exists for tests.
 
 Created and maintained by Nori.
