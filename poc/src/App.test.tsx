@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OnchainSDK } from '@gearbox-protocol/sdk/onchain'
 import type { Address } from 'viem'
@@ -93,6 +93,24 @@ const fixtureOpportunities: LoadedGearboxOpportunity[] = [
   loadedOpportunity('mGLOBAL', 'mGLOBAL', true, [mGlobalRoute]),
 ]
 
+// The cockpit's chart lazily fetches a strategy back-test over the network
+// (Gearbox backend or on-chain NAV); these fixtures don't attach a real SDK
+// or backend, so stub it out rather than let jsdom hang on a real fetch.
+vi.mock('./lib/gearbox/strategyBacktest', () => ({
+  fetchStrategyBacktest: vi.fn().mockResolvedValue(undefined),
+  fetchNavBacktest: vi.fn().mockResolvedValue(undefined),
+}))
+
+// Same story for the DefiLlama benchmark fetch — real network, no bearing on
+// what these tests assert, and slow/flaky under full-suite load.
+vi.mock('./lib/defillamaYields', async () => {
+  const actual = await vi.importActual<typeof import('./lib/defillamaYields')>('./lib/defillamaYields')
+  return {
+    ...actual,
+    loadEthereumYieldBenchmarks: vi.fn().mockResolvedValue([]),
+  }
+})
+
 vi.mock('./lib/gearbox/live', async () => {
   const actual = await vi.importActual<typeof import('./lib/gearbox/live')>('./lib/gearbox/live')
   return {
@@ -133,5 +151,25 @@ describe('App — RWA opportunities', () => {
 
     expect(await screen.findByRole('tab', { name: /mf-one/i })).toBeInTheDocument()
     expect(await screen.findByRole('tab', { name: /mglobal/i })).toBeInTheDocument()
+  })
+
+  it('fetches the RWA back-test from the on-chain NAV source, and the ETH+ back-test from the Gearbox backend', async () => {
+    const backtest = await import('./lib/gearbox/strategyBacktest')
+    const { App } = await import('./App')
+    render(<App />)
+
+    const wethTab = await screen.findByRole('tab', { name: /weth/i })
+    fireEvent.click(wethTab)
+    expect(vi.mocked(backtest.fetchStrategyBacktest)).toHaveBeenCalledWith(wethRoute.address, wethRoute.liquidationThresholdBps, expect.any(Number))
+
+    const mfOneTab = await screen.findByRole('tab', { name: /mf-one/i })
+    fireEvent.click(mfOneTab)
+    expect(vi.mocked(backtest.fetchNavBacktest)).toHaveBeenCalledWith(
+      mfOneRoute.address,
+      mfOneRoute.collateralToken,
+      mfOneRoute.liquidationThresholdBps,
+      expect.any(Number),
+      { borrowApyBps: mfOneRoute.baseBorrowRate / 100, quotaRateBps: Number(mfOneRoute.baseQuotaRateWithFee) / 100 },
+    )
   })
 })

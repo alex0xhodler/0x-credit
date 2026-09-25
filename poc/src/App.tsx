@@ -32,7 +32,7 @@ import {
   projectId,
   wagmiAdapter,
 } from './config'
-import { formatTokenAmount, parseTokenAmount } from './lib/gearbox/amounts'
+import { formatMinimumDeposit, parseTokenAmount } from './lib/gearbox/amounts'
 import {
   createExecutionSteps,
   formatOpportunityApy,
@@ -71,7 +71,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
-  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum', 'KPK'),
 }
 
 const MAINNET_WSTETH_STUB: OpportunityView = {
@@ -84,7 +84,7 @@ const MAINNET_WSTETH_STUB: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
-  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum', 'KPK'),
 }
 
 interface StoredOpenPosition {
@@ -249,27 +249,41 @@ function GearboxApp() {
           displaySymbol = 'USDT0'
         }
         seenSymbols.add(displaySymbol)
+        const minDepositDisplayDecimals = Math.min(4, route.collateralDecimals)
 
         views.push({
           id: `mainnet-${route.address}`,
           strategyId: opp.strategyId,
-          strategyName: opp.strategyName,
+          strategyName: route.strategyName,
           tokenSymbol: displaySymbol,
+          // RWA strategies are headlined by the target they hold (mF-ONE,
+          // mGLOBAL); the deposit token (frxUSD) stays on amount-related text.
+          headlineSymbol: route.rwa ? route.targetSymbol : displaySymbol,
           chainName: 'Ethereum',
           apyLabel: formatOpportunityApy(route.apy),
           leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
           protectionLabel: 'Mainnet strategy',
-          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
+          minDepositLabel: `Min deposit: ${formatMinimumDeposit(route.minimumDepositAmount, route.collateralDecimals, minDepositDisplayDecimals)} ${displaySymbol}`,
           isExecutable: true,
           apyPercent: route.apy !== undefined ? route.apy / 10_000 : undefined,
           baseApyPercent: route.baseApy !== undefined ? route.baseApy / 10_000 : undefined,
           borrowRatePercent: route.totalBorrowRate / 10_000,
           leverageMultiple: Number(route.maxLeverage) / 100,
           minimumDeposit: Number(route.minimumDepositAmount) / Math.pow(10, route.collateralDecimals),
+          minimumDepositRaw: route.minimumDepositAmount,
           collateralDecimals: route.collateralDecimals,
-          routeSteps: routeProvenanceForStrategy(opp.strategyId, 'Ethereum'),
+          routeSteps: routeProvenanceForStrategy(opp.strategyId, 'Ethereum', route.curator),
           rwa: route.rwa,
           kycRegistrationLink: route.kycRegistrationLink,
+          creditManager: route.address,
+          targetToken: opp.targetToken,
+          curator: route.curator,
+          liquidationThresholdBps: route.liquidationThresholdBps,
+          collateralApySource: route.collateralApySource,
+          // Back to SDK Bps (1% = 100) from the route's app units (1% = 10_000) —
+          // the back-test's fallback rate for a day the Gearbox chart doesn't cover.
+          currentBorrowApyBps: route.baseBorrowRate / 100,
+          currentQuotaRateBps: Number(route.baseQuotaRateWithFee) / 100,
         })
       })
     }
@@ -313,7 +327,8 @@ function GearboxApp() {
     if (!opportunity || !amountRaw || !selectedRoute) return undefined
 
     if (amountRaw < selectedRoute.minimumDepositAmount) {
-      return `Enter at least ${formatTokenAmount(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.04 HF and the strategy minimum debt.`
+      const displayDecimals = Math.min(4, selectedRoute.collateralDecimals)
+      return `Enter at least ${formatMinimumDeposit(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals, displayDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.04 HF and the strategy minimum debt.`
     }
     const debt = (amountRaw * (selectedRoute.maxLeverage - 100n)) / 100n
     if (debt < selectedRoute.minDebt || debt > selectedRoute.maxDebt || debt > selectedRoute.availableToBorrow) {
@@ -329,9 +344,9 @@ function GearboxApp() {
 
   // Reset amount to minimum deposit whenever the selected opportunity changes
   useEffect(() => {
-    if (!displayedOpportunity?.minimumDeposit) return
+    if (!displayedOpportunity?.minimumDepositRaw) return
     const decimals = Math.min(4, displayedOpportunity.collateralDecimals ?? 4)
-    setAmount(displayedOpportunity.minimumDeposit.toFixed(decimals))
+    setAmount(formatMinimumDeposit(displayedOpportunity.minimumDepositRaw, displayedOpportunity.collateralDecimals ?? 18, decimals))
   }, [displayedOpportunity?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

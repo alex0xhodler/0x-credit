@@ -2436,6 +2436,38 @@ button {
   color: var(--ink);
 }
 
+.yield-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: baseline;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.yield-breakdown strong {
+  color: var(--ink);
+}
+
+.yield-breakdown small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.yield-breakdown-net {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.yield-breakdown-net strong {
+  color: var(--primary);
+}
+
 .rwa-disclosure {
   margin: 0 0 16px;
   padding: 10px 12px;

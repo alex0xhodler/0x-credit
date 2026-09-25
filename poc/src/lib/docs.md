@@ -10,25 +10,18 @@ Path: @/poc/src/lib
 
 ### How it fits into the larger codebase
 
-- `TransactionCockpit.tsx` uses `defillamaYields.ts` to load the fixed Ethereum benchmark set, `comparisonTimeline.ts` to turn APY history and current rates into a continuous balance timeline, and `chartTooltip.ts` to keep comparison-tooltip ordering and labels deterministic.
+- `TransactionCockpit.tsx` uses `gearbox/strategyBacktest.ts` for the selected route's own leveraged history, `defillamaYields.ts` to load the single ETH-only LST benchmark, `comparisonTimeline.ts` to turn both into a continuous balance timeline, and `chartTooltip.ts` to keep comparison-tooltip ordering and labels deterministic.
 - `@/poc/src/lib/gearbox/` contains all Gearbox SDK integration — strategy loading, execution planning, deposit controls, and transaction utilities.
 - `App.tsx` imports from `gearbox/live.ts`, `gearbox/plan.ts`, `gearbox/sdkAdapter.ts`, and `gearbox/transactions.ts` for orchestration.
-- `TransactionCockpit.tsx` imports `gearbox/transactions.ts` only for user-facing transaction-error formatting; its chart data comes from the chart-domain utilities above.
+- `TransactionCockpit.tsx` imports `gearbox/transactions.ts` for user-facing transaction-error formatting and `gearbox/strategyBacktest.ts`/`gearbox/amounts.ts` for chart history and minimum-deposit formatting; the rest of its chart data comes from the chart-domain utilities above.
 
 ### Core Implementation
 
 **comparisonTimeline.ts and defillamaYields.ts**
 
-`loadEthereumYieldBenchmarks(signal?)` fetches DefiLlama’s pool index and per-pool APY charts for a deliberately pinned set of Ethereum pools:
+`loadEthereumYieldBenchmarks(signal?)` fetches DefiLlama's pool index and APY chart for one pinned Ethereum pool — Lido stETH (`747c1d2a-c668-4682-b9f9-296708a3dd90`), the liquid-staking benchmark. It only renders next to an ETH-like deposit (see `TransactionCockpit.tsx`'s `isEthLikeSymbol`); a stable/RWA deposit (frxUSD) shows a flat "Hold {symbol}" baseline instead of an ETH comparison. Before accepting the pool, the loader validates its pool id, Ethereum chain, project, symbol, exposure, finite non-negative APY, and non-outlier status.
 
-| Series | Pool | Use in chart |
-|---|---|---|
-| Beefy ETH+/WETH | `c98203f5-ea5c-42b0-ab85-f3edfd7b9cbe` | Historical base-strategy comparison |
-| Lido stETH | `747c1d2a-c668-4682-b9f9-296708a3dd90` | Liquid-staking benchmark |
-
-Before accepting a pool, the loader validates its pool id, Ethereum chain, project, symbol, exposure, finite non-negative APY, and non-outlier status. It then returns valid dated APY observations from the pool’s history endpoint.
-
-`buildBalanceTimeline({ startingBalance, horizon, strategyApyPercent, benchmarks })` rebases available historical series at the entered ETH-equivalent balance, compounds historical APY daily until `Now`, and projects the same balances into the future. The selected route uses its current net APY for its future leg; Lido uses its current DefiLlama APY; WETH remains flat. A single numeric `time` axis spans past, `Now` (zero), and future.
+`buildBalanceTimeline({ startingBalance, horizon, strategyApyPercent, strategyHistory?, benchmarks })` rebases available historical series at the entered balance, compounds historical APY daily until `Now`, and projects the same balances into the future. `strategyHistory` is the selected route's own leveraged net-APY back-test (`gearbox/strategyBacktest.ts`), not a DefiLlama series — its absence (no chart history yet, or a fetch failure) draws a projection-only strategy line with no past segment, never a flat or misleading one; the future leg always starts from wherever the back-test compounding ended, with no gap or jump at `Now`. Lido uses its current DefiLlama APY for the future leg; the "hold" baseline remains flat. A single numeric `time` axis spans past, `Now` (zero), and future.
 
 **chartTooltip.ts**
 

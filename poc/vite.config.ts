@@ -20,5 +20,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
     globals: true,
+    // Full-suite runs render several React trees with recharts effects; under
+    // worker contention that can comfortably exceed the 5s default, even
+    // though each test resolves in well under 1s in isolation.
+    testTimeout: 10_000,
   },
 })
