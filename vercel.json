@@ -4,10 +4,6 @@
   "outputDirectory": "poc/dist",
   "rewrites": [
     {
-      "source": "/gearbox-apy/:path*",
-      "destination": "https://state-cache.gearbox.foundation/apy-server/:path*"
-    },
-    {
       "source": "/t54-api/:path*",
       "destination": "https://api.trustline.t54.ai/:path*"
     }

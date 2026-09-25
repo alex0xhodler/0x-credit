@@ -1,112 +1,77 @@
-import type { Address, Hex } from 'viem'
+import type { MultiCall, OpenCAProps, RawTx, SetBotProps } from '@gearbox-protocol/sdk/onchain'
+import type { Address } from 'viem'
 import { calculateLoopPlan } from './plan'
 
-interface MultiCallLike {
-  target: Address | string
-  callData: Hex | string
-}
-
-interface RawTxLike {
-  to: Address | string
-  callData: Hex | string
-  value: string
-}
-
 interface CreditManagerSuiteLike {
-  underlying: Address | string
   creditManager: {
-    address: Address | string
-    creditFacade: Address | string
-    collateralTokens: Array<Address | string>
+    address: Address
+    creditFacade: Address
+    collateralTokens: Address[]
   }
   creditFacade: {
-    address: Address | string
+    address: Address
     minDebt?: bigint
     maxDebt?: bigint
   }
 }
 
 interface MarketRegisterLike {
-  findCreditManager(creditManager: Address | string): CreditManagerSuiteLike
+  findCreditManager(creditManager: Address): CreditManagerSuiteLike
 }
 
 interface RouterLike {
   findOpenStrategyPath(args: {
     creditManager: CreditManagerSuiteLike['creditManager']
-    expectedBalances: Array<{ token: Address | string; balance: bigint }>
-    leftoverBalances: Array<{ token: Address | string; balance: bigint }>
+    expectedBalances: Array<{ token: Address; balance: bigint }>
+    leftoverBalances: Array<{ token: Address; balance: bigint }>
     slippage: number
-    target: Address | string
+    target: Address
   }): Promise<{
     amount: bigint
     minAmount: bigint
-    calls: MultiCallLike[]
+    calls: MultiCall[]
   }>
 }
 
 interface AccountsLike {
   getApprovalAddress(args: {
-    creditManager: Address | string
-    borrower: Address | string
-  }): Promise<Address | string>
-  setBot(args: {
-    botAddress: Address | string
-    permissions: null
-    targetContract: {
-      type: 'creditManager'
-      creditManager: Address | string
-      creditFacade: Address | string
-    }
-  }): Promise<{ calls: MultiCallLike[] }>
-  openCA(args: {
-    averageQuota: Array<{ token: Address | string; balance: bigint }>
-    calls: MultiCallLike[]
-    callsAfter: MultiCallLike[]
-    collateral: Array<{ token: Address | string; balance: bigint }>
-    creditManager: Address | string
-    debt: bigint
-    ethAmount: bigint
-    minQuota: Array<{ token: Address | string; balance: bigint }>
-    permits: Record<string, never>
-    referralCode: bigint
-    to: Address | string
-  }): Promise<{ tx: RawTxLike }>
-}
-
-interface GearboxSdkLike {
-  marketRegister: unknown
-  routerFor: unknown
-  accounts: unknown
-}
-
-interface GearboxSdkNarrowed {
-  marketRegister: {
-    findCreditManager: MarketRegisterLike['findCreditManager']
+    creditManager: Address
+    borrower: Address
+  }): Promise<Address>
+  // Setting a bot on a credit manager (rather than an existing credit
+  // account) yields calls only, no standalone transaction.
+  bots: {
+    setBot(args: SetBotProps): Promise<{ calls: MultiCall[] }>
   }
+  openCA(args: OpenCAProps): Promise<RawTx>
+}
+
+export interface PrepareOpenStrategySdk {
+  marketRegister: MarketRegisterLike
   routerFor(params: unknown): RouterLike
   accounts: AccountsLike
 }
 
 export interface PrepareOpenStrategyInput {
-  sdk: GearboxSdkLike
-  borrower: Address | string
-  creditManager: Address | string
-  collateralToken: Address | string
-  targetToken: Address | string
+  sdk: PrepareOpenStrategySdk
+  borrower: Address
+  creditManager: Address
+  collateralToken: Address
+  targetToken: Address
   collateralAmount: bigint
   leverage: bigint
   quotaReserveBps: bigint
   slippageBps: number
-  botAddress?: Address | string
+  botAddress?: Address
   referralCode: bigint
 }
 
 export interface PreparedOpenStrategyTx {
-  approvalTarget: Address | string
+  approvalTarget: Address
   debt: bigint
   quota: bigint
   totalOnAccount: bigint
-  rawTx: RawTxLike
+  rawTx: RawTx
   routerAmount: bigint
   routerMinAmount: bigint
 }
@@ -130,8 +95,7 @@ export async function prepareOpenStrategyTx({
     throw new Error('Gearbox SDK is not available.')
   }
 
-  const narrowedSdk = sdk as GearboxSdkNarrowed
-  const cmSuite = narrowedSdk.marketRegister.findCreditManager(creditManager)
+  const cmSuite = sdk.marketRegister.findCreditManager(creditManager)
   const cmAddress = cmSuite.creditManager.address
   const creditFacade = cmSuite.creditFacade.address
   const minDebt = cmSuite.creditFacade.minDebt ?? 0n
@@ -146,11 +110,11 @@ export async function prepareOpenStrategyTx({
   }
 
   const [approvalTarget, openPath, botResult] = await Promise.all([
-    narrowedSdk.accounts.getApprovalAddress({
+    sdk.accounts.getApprovalAddress({
       creditManager: cmAddress,
       borrower,
     }),
-    narrowedSdk.routerFor(cmSuite).findOpenStrategyPath({
+    sdk.routerFor(cmSuite).findOpenStrategyPath({
       creditManager: cmSuite.creditManager,
       expectedBalances: [{ token: collateralToken, balance: plan.totalOnAccount }],
       leftoverBalances: [{ token: collateralToken, balance: 1n }],
@@ -158,7 +122,7 @@ export async function prepareOpenStrategyTx({
       target: targetToken,
     }),
     botAddress
-      ? narrowedSdk.accounts.setBot({
+      ? sdk.accounts.bots.setBot({
           botAddress,
           permissions: null,
           targetContract: {
@@ -167,10 +131,10 @@ export async function prepareOpenStrategyTx({
             creditFacade,
           },
         })
-      : Promise.resolve({ calls: [] as MultiCallLike[] }),
+      : Promise.resolve({ calls: [] as MultiCall[] }),
   ])
 
-  const openResult = await narrowedSdk.accounts.openCA({
+  const rawTx = await sdk.accounts.openCA({
     averageQuota: [{ token: targetToken, balance: plan.quota }],
     calls: openPath.calls,
     callsAfter: botResult.calls,
@@ -189,7 +153,7 @@ export async function prepareOpenStrategyTx({
     debt: plan.debt,
     quota: plan.quota,
     totalOnAccount: plan.totalOnAccount,
-    rawTx: openResult.tx,
+    rawTx,
     routerAmount: openPath.amount,
     routerMinAmount: openPath.minAmount,
   }

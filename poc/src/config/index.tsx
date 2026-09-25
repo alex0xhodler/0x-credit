@@ -1,5 +1,5 @@
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
-import { monad, mainnet } from '@reown/appkit/networks'
+import { mainnet } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/networks'
 
 // Get projectId from https://dashboard.reown.com
@@ -10,12 +10,12 @@ export const projectId = configuredProjectId || localhostProjectId
 
 export const metadata = {
   name: '0x.credit',
-  description: 'Amplified USDC yield routes on Monad',
+  description: 'Leveraged Gearbox yield and RWA strategies on Ethereum mainnet',
   url: typeof window === 'undefined' ? 'https://0x.credit' : window.location.origin,
   icons: ['https://avatars.githubusercontent.com/u/179229932'],
 }
 
-export const networks = [monad, mainnet] as [AppKitNetwork, ...AppKitNetwork[]]
+export const networks = [mainnet] as [AppKitNetwork, ...AppKitNetwork[]]
 
 //Set up the Wagmi Adapter (Config)
 export const wagmiAdapter = new WagmiAdapter({

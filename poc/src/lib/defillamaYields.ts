@@ -19,7 +19,7 @@ export interface DefiLlamaRatePoint {
 }
 
 export interface YieldBenchmark {
-  id: 'strategyBase' | 'lst'
+  id: 'lst'
   label: string
   sourceLabel: string
   sourceUrl: string
@@ -30,16 +30,6 @@ export interface YieldBenchmark {
 }
 
 const BENCHMARKS = [
-  {
-    id: 'strategyBase' as const,
-    label: 'Strategy base · Beefy ETH+/WETH',
-    sourceLabel: 'DefiLlama · Beefy',
-    sourceUrl: 'https://defillama.com/yields/pool/c98203f5-ea5c-42b0-ab85-f3edfd7b9cbe',
-    pool: 'c98203f5-ea5c-42b0-ab85-f3edfd7b9cbe',
-    project: 'beefy',
-    symbol: 'ETH+-WETH',
-    exposure: 'multi',
-  },
   {
     id: 'lst' as const,
     label: 'LST · Lido stETH',

@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import type { Address } from 'viem'
 import {
   CartesianGrid,
   Line,
@@ -10,16 +11,20 @@ import {
   YAxis,
 } from 'recharts'
 import type { ExecutionStep } from './lib/gearbox/plan'
-import { loadEthereumYieldBenchmarks, type YieldBenchmark } from './lib/defillamaYields'
+import { loadEthereumYieldBenchmarks, type DefiLlamaRatePoint, type YieldBenchmark } from './lib/defillamaYields'
 import { buildBalanceTimeline, type ComparisonHorizon } from './lib/comparisonTimeline'
-import { orderedComparisonTooltipRows } from './lib/chartTooltip'
+import { formatChartTimeLabel, orderedComparisonTooltipRows } from './lib/chartTooltip'
 import { formatTransactionError } from './lib/gearbox/transactions'
+import { formatMinimumDeposit } from './lib/gearbox/amounts'
+import { fetchNavBacktest, fetchStrategyBacktest, type StrategyBacktestPoint } from './lib/gearbox/strategyBacktest'
 
 export interface OpportunityView {
   id: string
   strategyId: string
   strategyName: string
   tokenSymbol: string
+  /** Symbol shown as the strategy's headline (tab, chart title, builder heading). For RWA routes this is the target token (mF-ONE, mGLOBAL), never the deposit token; for others it matches `tokenSymbol`. */
+  headlineSymbol?: string
   chainName: string
   apyLabel: string
   leverageLabel: string
@@ -32,9 +37,32 @@ export interface OpportunityView {
   borrowRatePercent?: number
   leverageMultiple?: number
   minimumDeposit?: number
+  /** Raw on-chain minimum, for rounding UP to a display precision — never nearest/down, see formatMinimumDeposit. */
+  minimumDepositRaw?: bigint
   collateralDecimals?: number
   routeSteps?: readonly RouteStep[]
+  rwa?: boolean
+  kycRegistrationLink?: string
+  creditManager?: Address
+  /** Collateral position target (e.g. the mF-ONE/mGLOBAL token), for the NAV back-test's price-feed lookup. */
+  targetToken?: Address
+  /** On-chain curator name (e.g. "KPK"), never hard-coded. */
+  curator?: string
+  liquidationThresholdBps?: number
+  /** Where collateral apy/history comes from: the Gearbox backend, or an on-chain Midas NAV feed for mF-ONE/mGLOBAL. Drives both the back-test fetch and the footer's source attribution. */
+  collateralApySource?: 'backend' | 'nav'
+  /** Current borrow apy / quota rate in SDK Bps (1% = 100) — the back-test's fallback rates for a day the Gearbox rates chart doesn't cover. */
+  currentBorrowApyBps?: number
+  currentQuotaRateBps?: number
 }
+
+export interface RwaExecutionGateView {
+  canExecute: boolean
+  reason?: string
+  registrationLink?: string
+}
+
+export const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
 
 export interface RouteStep {
   role: string
@@ -72,6 +100,7 @@ export interface TransactionCockpitProps {
   activePositionStats?: ActivePositionStats
   headerVariant?: HeaderVariant
   topbarVariant?: TopbarVariant
+  rwaGate?: RwaExecutionGateView
 }
 
 type Horizon = ComparisonHorizon
@@ -137,6 +166,20 @@ function formatCompact(value: number, symbol: string): string {
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${symbol}`
 }
 
+/** Compact axis tick for balances that can range from single digits (ETH deposits) to tens of thousands (RWA deposits) — a fixed 2-decimal format garbles/clips at that width. */
+function formatAxisTick(value: number): string {
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  return value.toFixed(2)
+}
+
+/** True for a deposit token whose value we can meaningfully compare against ETH-denominated DefiLlama benchmarks (Lido stETH). RWA/stable deposits (frxUSD) get a flat "hold" baseline instead — comparing them to ETH staking yield would be apples-to-oranges. */
+function isEthLikeSymbol(symbol: string): boolean {
+  return /eth/i.test(symbol)
+}
+
+
 
 function ChartSkeleton() {
   return (
@@ -182,11 +225,59 @@ function useEthereumYieldBenchmarks() {
   return { benchmarks, fetchedAt }
 }
 
-function YieldComparisonChart({ startingBalance, apyPercent, benchmarks, horizon }: { startingBalance: number; apyPercent: number; benchmarks: readonly YieldBenchmark[]; horizon: Horizon }) {
-  const data = useMemo(() => buildBalanceTimeline({ startingBalance, strategyApyPercent: apyPercent, benchmarks, horizon }), [startingBalance, apyPercent, benchmarks, horizon])
+/**
+ * Lazily fetches (and caches, per `strategyBacktest.ts`) the leveraged
+ * back-test for the currently selected route, so the chart's past line
+ * reflects real history instead of a flat/absent segment. A NAV-priced RWA
+ * route (mF-ONE, mGLOBAL) reads its history from the on-chain Midas feed;
+ * everything else reads it from the Gearbox backend chart.
+ */
+function useStrategyBacktest(opportunity: OpportunityView): StrategyBacktestPoint[] | undefined {
+  const [history, setHistory] = useState<StrategyBacktestPoint[]>()
+  const {
+    creditManager,
+    targetToken,
+    liquidationThresholdBps,
+    leverageMultiple,
+    collateralApySource,
+    currentBorrowApyBps,
+    currentQuotaRateBps,
+  } = opportunity
+
+  useEffect(() => {
+    setHistory(undefined)
+    if (!creditManager || liquidationThresholdBps === undefined || leverageMultiple === undefined) return
+
+    let cancelled = false
+    const fetchPromise = collateralApySource === 'nav'
+      ? (targetToken && currentBorrowApyBps !== undefined && currentQuotaRateBps !== undefined
+          ? fetchNavBacktest(creditManager, targetToken, liquidationThresholdBps, leverageMultiple, {
+              borrowApyBps: currentBorrowApyBps,
+              quotaRateBps: currentQuotaRateBps,
+            })
+          : Promise.resolve(undefined))
+      : fetchStrategyBacktest(creditManager, liquidationThresholdBps, leverageMultiple)
+
+    fetchPromise
+      .then(points => {
+        if (!cancelled) setHistory(points)
+      })
+      .catch(() => {
+        if (!cancelled) setHistory(undefined)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [creditManager, targetToken, liquidationThresholdBps, leverageMultiple, collateralApySource, currentBorrowApyBps, currentQuotaRateBps])
+
+  return history
+}
+
+function YieldComparisonChart({ startingBalance, apyPercent, strategyHistory, holdSymbol, benchmarks, horizon }: { startingBalance: number; apyPercent: number; strategyHistory?: readonly DefiLlamaRatePoint[]; holdSymbol: string; benchmarks: readonly YieldBenchmark[]; horizon: Horizon }) {
+  const data = useMemo(() => buildBalanceTimeline({ startingBalance, strategyApyPercent: apyPercent, strategyHistory, benchmarks, horizon }), [startingBalance, apyPercent, strategyHistory, benchmarks, horizon])
   const projectionSeries = [
     { id: 'strategy', apyPercent },
-    ...benchmarks.filter(benchmark => benchmark.id !== 'strategyBase').map(benchmark => ({ id: benchmark.id, apyPercent: benchmark.apyPercent })),
+    ...benchmarks.map(benchmark => ({ id: benchmark.id, apyPercent: benchmark.apyPercent })),
   ]
   const spanDays = horizon * 30
 
@@ -195,15 +286,15 @@ function YieldComparisonChart({ startingBalance, apyPercent, benchmarks, horizon
       <LineChart data={data} margin={{ top: 10, right: 4, left: 4, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
         <XAxis dataKey="time" type="number" domain={[-spanDays, spanDays]} ticks={[-spanDays, 0, spanDays]} tickFormatter={value => value === 0 ? 'Now' : value < 0 ? `Past ${horizon === 1 ? '1M' : `${horizon}M`}` : horizon === 12 ? 'Potential 1Y' : `Potential ${horizon}M`} tick={{ fontSize: 10, fill: 'rgb(150,150,150)' }} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={value => Number(value).toFixed(2)} tick={{ fontSize: 10, fill: 'rgb(150,150,150)' }} axisLine={false} tickLine={false} width={38} domain={['auto', 'auto']} />
+        <YAxis tickFormatter={formatAxisTick} tick={{ fontSize: 10, fill: 'rgb(150,150,150)' }} axisLine={false} tickLine={false} width={46} domain={['auto', 'auto']} />
         <ReferenceLine x={0} stroke="rgba(0,0,0,0.18)" strokeWidth={1} />
         <Tooltip content={({ active, payload, label }) => {
           if (!active || !payload?.length) return null
           const future = Number(label) >= 0
           const values = Object.fromEntries(payload.map(point => [String(point.dataKey), Number(point.value)]))
-          const rows = orderedComparisonTooltipRows(values)
+          const rows = orderedComparisonTooltipRows(values, holdSymbol)
           const days = Math.abs(Number(label))
-          const timeLabel = days === 0 ? 'Now' : `${Math.round(days / 30)} month${days >= 45 ? 's' : ''} ${future ? 'ahead' : 'ago'}`
+          const timeLabel = formatChartTimeLabel(days, future)
           return (
             <div className="chart-tooltip chart-tooltip--comparison">
               <div className="tooltip-time">{timeLabel}</div>
@@ -211,8 +302,8 @@ function YieldComparisonChart({ startingBalance, apyPercent, benchmarks, horizon
               {rows.map(row => (
                 <div key={row.id} className={`tooltip-comparison-row tooltip-comparison-row--${row.id}`}>
                   <span className="tooltip-series" style={{ '--series-color': row.color } as CSSProperties}>
-                    <b>{!future && row.id === 'strategy' ? 'Strategy base · Beefy' : row.label}</b>
-                    <small>{!future && row.id === 'strategy' ? 'Underlying pool APY · before leverage' : row.detail}</small>
+                    <b>{row.label}</b>
+                    <small>{row.detail}</small>
                   </span>
                   <span className="tooltip-value"><strong>{row.value.toFixed(3)}</strong>{row.id !== 'weth' && <em>{row.deltaFromWeth >= 0 ? '+' : ''}{row.deltaFromWeth.toFixed(3)} vs hold</em>}</span>
                 </div>
@@ -220,7 +311,7 @@ function YieldComparisonChart({ startingBalance, apyPercent, benchmarks, horizon
             </div>
           )
         }} />
-        <Line type="monotone" dataKey="weth" name="Hold WETH" stroke="#737373" strokeWidth={1.25} strokeDasharray="3 4" dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="weth" name={`Hold ${holdSymbol}`} stroke="#737373" strokeWidth={1.25} strokeDasharray="3 4" dot={false} isAnimationActive={false} />
         {projectionSeries.map(item => {
           const config = comparisonSeries.find(candidate => candidate.id === item.id)
           return config && <Line key={item.id} type="monotone" dataKey={item.id} name={config.label} stroke={config.color} strokeWidth={item.id === 'strategy' ? 2.4 : 1.6} strokeDasharray={config.dash} dot={false} isAnimationActive={item.id === 'strategy'} animationDuration={500} />
@@ -251,6 +342,7 @@ export function TransactionCockpit({
   activePositionStats,
   headerVariant = 'editorial',
   topbarVariant = 'shelf',
+  rwaGate,
 }: TransactionCockpitProps) {
   const [horizon, setHorizon] = useState<Horizon>(6)
   const pageHeadingId = useId()
@@ -263,16 +355,37 @@ export function TransactionCockpit({
   const parsedAmount = Number(amount)
   const validAmount = Number.isFinite(parsedAmount) && parsedAmount > 0
 
-  const canExecute = isConnected && isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
+  const canExecute = isConnected && isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning && (rwaGate?.canExecute ?? true)
   const canStart = isProjectReady && canUseOpportunity && validAmount && !isBusy && !positionOpen && !routeWarning
 
-  const isDataLoading = opportunity.apyPercent === undefined
+  // RWA collateral APY feeds have no data today (both mF-ONE and mGLOBAL) —
+  // that is a loaded, known state, not a still-loading one, so it must not
+  // drive the loading skeletons.
+  const apyUnavailable = Boolean(opportunity.rwa) && opportunity.apyPercent === undefined
+  const isDataLoading = opportunity.apyPercent === undefined && !opportunity.rwa
   const apyPercent = opportunity.apyPercent ?? 0
   const leverageMultiple = opportunity.leverageMultiple ?? 1
   const minimumDeposit = opportunity.minimumDeposit ?? 0
   const requestedChartBalance = validAmount ? parsedAmount : minimumDeposit || 1
   const chartStartingBalance = useDebouncedNumber(requestedChartBalance, 300)
-  const { benchmarks, fetchedAt } = useEthereumYieldBenchmarks()
+  const { benchmarks: ethBenchmarks, fetchedAt } = useEthereumYieldBenchmarks()
+  const strategyHistory = useStrategyBacktest(opportunity)
+  // ETH-denominated DefiLlama benchmarks (Lido stETH) only make sense next to
+  // an ETH-like deposit; an RWA/stable strategy gets a flat hold baseline in
+  // its own deposit token instead (see isEthLikeSymbol).
+  const isEthLikeCollateral = isEthLikeSymbol(opportunity.tokenSymbol)
+  const benchmarks = isEthLikeCollateral ? ethBenchmarks : []
+  // Attribute the chart to the data actually used: NAV routes never touch
+  // the backend's own collateralApy, and DefiLlama only ever supplies the
+  // lst benchmark shown next to an ETH-like deposit.
+  const chartSourceLabel = opportunity.collateralApySource === 'nav'
+    ? 'Midas NAV (on-chain) · Gearbox rates'
+    : `Gearbox${isEthLikeCollateral ? ' + DefiLlama benchmarks' : ''}`
+  const collateralApySourceShortLabel = opportunity.collateralApySource === 'nav' ? 'Midas NAV' : 'Gearbox'
+  // Tab, chart title and the builder heading show the strategy's headline
+  // token (mF-ONE, mGLOBAL for RWA); deposit amounts everywhere else keep
+  // the actual deposit token (tokenSymbol, e.g. frxUSD).
+  const headlineSymbol = opportunity.headlineSymbol ?? opportunity.tokenSymbol
   const selectedOpportunityIndex = Math.max(opportunities.findIndex(item => item.id === opportunity.id), 0)
   const headerLabel = {
     desk: 'Strategy selection',
@@ -290,7 +403,7 @@ export function TransactionCockpit({
     desk: 'Projected balance',
     journey: 'Your projected outcome',
     ticket: 'Projected return',
-    editorial: `${opportunity.tokenSymbol} amplified loop`,
+    editorial: `${headlineSymbol} amplified loop`,
   }[headerVariant]
 
   const annualYield = validAmount ? parsedAmount * (apyPercent / 100) : undefined
@@ -299,7 +412,7 @@ export function TransactionCockpit({
 const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, positionOpen, activePositionStats)
 
   const actionLabel = isConnected
-    ? isBusy ? 'Opening Smart account...' : `Earn ${apyPercent.toFixed(2)}%`
+    ? isBusy ? 'Opening Smart account...' : apyUnavailable ? 'Earn' : `Earn ${apyPercent.toFixed(2)}%`
     : 'Start earning'
 
   const displayError = error ? formatTransactionError(error) : undefined
@@ -429,19 +542,22 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                   tabIndex={opp.id === opportunity.id ? 0 : -1}
                   type="button"
                 >
-                  <TokenIcon symbol={opp.tokenSymbol} />
-                  <span>{opp.tokenSymbol}</span>
+                  <TokenIcon symbol={opp.headlineSymbol ?? opp.tokenSymbol} />
+                  <span>{opp.headlineSymbol ?? opp.tokenSymbol}</span>
                   {opp.apyPercent !== undefined
                     ? <span className="tab-apy">{opp.apyPercent.toFixed(1)}%</span>
-                    : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
+                    : opp.rwa
+                      ? <span className="tab-apy">n/a</span>
+                      : <span className="tab-apy tab-apy--loading" aria-hidden="true" />
                   }
                 </button>
               ))}
 
-              <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
+              {/* Institutional Credit entry point is disabled for now. */}
+              {/* <a href="?view=advisor" className="strategy-tab strategy-tab--advisor">
                 Institutional Credit
                 <span className="advisor-nav-tag">Early access</span>
-              </a>
+              </a> */}
             </div>
           </div>
 
@@ -458,10 +574,12 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
           <section className="cockpit-chart-pane" aria-label="Projected earnings">
             <div className="chart-header">
               <div>
-                <span className="chart-title">{chartTitle} <span className="chart-title-unit">{headerVariant === 'editorial' ? 'estimated' : opportunity.tokenSymbol}</span></span>
+                <span className="chart-title">{chartTitle} <span className="chart-title-unit">{headerVariant === 'editorial' ? 'estimated' : headlineSymbol}</span></span>
                 {isDataLoading
                   ? <span className="chart-apy-badge chart-apy-badge--loading" aria-hidden="true" />
-                  : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
+                  : apyUnavailable
+                    ? <span className="chart-apy-badge">APY n/a</span>
+                    : apyPercent > 0 && <span className="chart-apy-badge">{apyPercent.toFixed(1)}% APY</span>
                 }
               </div>
               <div className="horizon-toggle" role="radiogroup" aria-label="Comparison period">
@@ -506,23 +624,33 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             <div className="chart-grow chart-comparison" aria-label="Historical benchmark rates and future yield projection">
               {isDataLoading
                 ? <ChartSkeleton />
-                : <YieldComparisonChart startingBalance={chartStartingBalance} apyPercent={apyPercent} benchmarks={benchmarks} horizon={horizon} />
+                : apyUnavailable
+                  ? (
+                    <p className="chart-apy-unavailable">
+                      This strategy has no published collateral APY yet. Review the borrow cost and leverage below before opening a position.
+                    </p>
+                  )
+                  : <YieldComparisonChart startingBalance={chartStartingBalance} apyPercent={apyPercent} strategyHistory={strategyHistory} holdSymbol={opportunity.tokenSymbol} benchmarks={benchmarks} horizon={horizon} />
               }
             </div>
 
-            {!isDataLoading && (
+            {!isDataLoading && !apyUnavailable && (
               <div className="chart-footer">
                 <span className="cf-item">
                   <span className="cf-swatch cf-swatch--amp" />
                   Net strategy <strong>{apyPercent.toFixed(1)}%</strong>
                 </span>
-                <span className="cf-item"><span className="cf-swatch cf-swatch--weth" />Hold WETH <strong>0.0%</strong></span>
-                {benchmarks.filter(benchmark => benchmark.id !== 'strategyBase').map(benchmark => {
+                <span className="cf-item"><span className="cf-swatch cf-swatch--weth" />Hold {opportunity.tokenSymbol} <strong>0.0%</strong></span>
+                {benchmarks.map(benchmark => {
                   const style = comparisonSeries.find(item => item.id === benchmark.id)
                   return <span className="cf-item" key={benchmark.id}><span className={`cf-swatch cf-swatch--${benchmark.id}`} />{style?.label} <strong>{benchmark.apyPercent.toFixed(1)}%</strong></span>
                 })}
                 <span className="cf-source">
-                  {fetchedAt ? `DefiLlama benchmarks · fetched ${fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'DefiLlama benchmarks loading…'}
+                  {isEthLikeCollateral
+                    ? (fetchedAt
+                        ? `${chartSourceLabel} · fetched ${fetchedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : `${chartSourceLabel} · DefiLlama loading…`)
+                    : chartSourceLabel}
                 </span>
               </div>
             )}
@@ -534,15 +662,38 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             <div className="builder-heading">
               <span className="selected-label">Selected strategy</span>
               <strong className="builder-token">
-                {opportunity.tokenSymbol}
+                {headlineSymbol}
                 <span className="builder-token-sep"> · </span>
                 {isDataLoading
                   ? <span className="builder-apy-shimmer" aria-hidden="true" />
-                  : `${apyPercent.toFixed(2)}% APY`
+                  : apyUnavailable
+                    ? 'APY n/a'
+                    : `${apyPercent.toFixed(2)}% APY`
                 }
               </strong>
               <span className="builder-strategy">{opportunity.strategyName}</span>
             </div>
+
+            {!isDataLoading && !apyUnavailable ? (
+              <div className="yield-breakdown" aria-label="Yield breakdown">
+                <span>Collateral yield <strong>{`${(opportunity.baseApyPercent ?? 0).toFixed(2)}%`}</strong> <small>({collateralApySourceShortLabel})</small></span>
+                <span>Borrow cost <strong>{`${(opportunity.borrowRatePercent ?? 0).toFixed(2)}%`}</strong></span>
+                <span>Leverage <strong>{`${(opportunity.leverageMultiple ?? 1).toFixed(2)}x`}</strong></span>
+                <span className="yield-breakdown-net">→ Net APY <strong>{apyPercent.toFixed(2)}%</strong></span>
+              </div>
+            ) : opportunity.rwa && (
+              <div className="rwa-cost-summary" aria-label="Borrow cost and leverage">
+                <span>Borrow cost <strong>{`${(opportunity.borrowRatePercent ?? 0).toFixed(2)}%`}</strong></span>
+                <span>Leverage <strong>{`${(opportunity.leverageMultiple ?? 1).toFixed(2)}x`}</strong></span>
+              </div>
+            )}
+
+            {opportunity.rwa && (
+              <p className="rwa-disclosure">
+                Exits use delayed Midas redemption and are managed on Gearbox.{' '}
+                <a href={GEARBOX_DASHBOARD_URL} target="_blank" rel="noopener noreferrer">Gearbox dashboard</a>
+              </p>
+            )}
 
             {/* Deposit input */}
             <div className={`deposit-section${isDataLoading ? ' is-loading' : ''}`}>
@@ -564,7 +715,15 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 <button
                   type="button"
                   className="deposit-preset"
-                  onClick={() => onAmountChange(minimumDeposit.toFixed(Math.min(4, opportunity.collateralDecimals ?? 4)))}
+                  onClick={() => {
+                    const decimals = opportunity.collateralDecimals ?? 18
+                    const displayDecimals = Math.min(4, decimals)
+                    onAmountChange(
+                      opportunity.minimumDepositRaw !== undefined
+                        ? formatMinimumDeposit(opportunity.minimumDepositRaw, decimals, displayDecimals)
+                        : minimumDeposit.toFixed(displayDecimals),
+                    )
+                  }}
                 >
                   Min
                 </button>
@@ -588,7 +747,7 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 <ul>
                   <li>You deposit <strong>{parsedAmount.toFixed(2)} {opportunity.tokenSymbol}</strong> as collateral.</li>
                   {borrowedEstimate > 0 && (
-                    <li>KPK on Gearbox lends you about <strong>{formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
+                    <li>{opportunity.curator ?? 'The curator'} on Gearbox lends you about <strong>{formatCompact(borrowedEstimate, opportunity.tokenSymbol)}</strong> to amplify the strategy.</li>
                   )}
                   <li>APY and health factor can move after opening.</li>
                 </ul>
@@ -601,6 +760,14 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
             )}
             {routeWarning && <p className="alert">{routeWarning}</p>}
             {!routeWarning && opportunity.disabledReason && <p className="alert">{opportunity.disabledReason}</p>}
+            {rwaGate && !rwaGate.canExecute && (
+              <p className="alert">
+                {rwaGate.reason}
+                {rwaGate.registrationLink && (
+                  <> <a href={rwaGate.registrationLink} target="_blank" rel="noopener noreferrer">Complete Midas registration</a></>
+                )}
+              </p>
+            )}
             {displayError && <p className="alert">{displayError}</p>}
 
             {hasStoredPosition && !positionOpen && onViewPosition && (
@@ -643,7 +810,7 @@ const simulatedPositionValue = useSimulatedPositionValue(amount, apyPercent, pos
                 </div>
               )
             })()}
-              {validAmount && annualYield !== undefined && (
+              {validAmount && !apyUnavailable && annualYield !== undefined && (
                 <div className="position-preview" aria-label="Position preview">
                   <div className="preview-row">
                     <span className="preview-pay">

@@ -21,8 +21,9 @@ import {
   WagmiProvider,
 } from 'wagmi'
 import './App.css'
-import { AdvisorApp } from './advisor/AdvisorApp'
-import { TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type TopbarVariant } from './TransactionCockpit'
+// Institutional Credit / advisor entry point is disabled for now.
+// import { AdvisorApp } from './advisor/AdvisorApp'
+import { GEARBOX_DASHBOARD_URL, TransactionCockpit, type OpportunityView, type ActivePositionStats, type HeaderVariant, type RwaExecutionGateView, type TopbarVariant } from './TransactionCockpit'
 import {
   config,
   isReownProjectConfigured,
@@ -31,7 +32,7 @@ import {
   projectId,
   wagmiAdapter,
 } from './config'
-import { formatTokenAmount, parseTokenAmount } from './lib/gearbox/amounts'
+import { formatMinimumDeposit, parseTokenAmount } from './lib/gearbox/amounts'
 import {
   createExecutionSteps,
   formatOpportunityApy,
@@ -41,21 +42,21 @@ import {
   type ExecutionStep,
 } from './lib/gearbox/plan'
 import {
+  checkStrategyEligibility,
   DEFAULT_QUOTA_RESERVE_BPS,
   DEFAULT_SLIPPAGE_BPS,
-  loadGearboxOpportunity,
-  MONAD_CHAIN_ID,
+  loadMainnetOpportunities,
   MAINNET_CHAIN_ID,
-  MAINNET_RPC_URL,
   MAINNET_STRATEGY_ID,
+  type GearboxCreditManagerRoute,
   type LoadedGearboxOpportunity,
 } from './lib/gearbox/live'
+import { rwaExecutionGate, type RwaEligibilityStatus } from './lib/gearbox/eligibility'
 import { prepareOpenStrategyTx } from './lib/gearbox/sdkAdapter'
 import { assertSuccessfulReceipt, formatTransactionError } from './lib/gearbox/transactions'
 import { routeProvenanceForStrategy } from './lib/routeProvenance'
 
 const queryClient = new QueryClient()
-const GEARBOX_DASHBOARD_URL = 'https://app.gearbox.finance/dashboard'
 const MAINNET_WETH_OPPORTUNITY_ID = 'mainnet-weth-wmoo-curve-eth-weth'
 const HEADER_VARIANTS: HeaderVariant[] = ['desk', 'journey', 'ticket', 'editorial']
 const TOPBAR_VARIANTS: TopbarVariant[] = ['identity', 'shelf', 'switchboard', 'portfolio']
@@ -70,7 +71,7 @@ const MAINNET_WETH_OPPORTUNITY: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
-  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum', 'KPK'),
 }
 
 const MAINNET_WSTETH_STUB: OpportunityView = {
@@ -83,7 +84,7 @@ const MAINNET_WSTETH_STUB: OpportunityView = {
   leverageLabel: 'sweet spot loading',
   protectionLabel: 'Mainnet strategy',
   isExecutable: true,
-  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum'),
+  routeSteps: routeProvenanceForStrategy(MAINNET_STRATEGY_ID, 'Ethereum', 'KPK'),
 }
 
 interface StoredOpenPosition {
@@ -146,7 +147,7 @@ createAppKit({
 function supportsAtomicBatch(capabilities: unknown): boolean {
   if (!capabilities || typeof capabilities !== 'object') return false
   const record = capabilities as Record<string, unknown>
-  const chainCapabilities = record[MONAD_CHAIN_ID] ?? record[String(MONAD_CHAIN_ID)]
+  const chainCapabilities = record[MAINNET_CHAIN_ID] ?? record[String(MAINNET_CHAIN_ID)]
   if (!chainCapabilities || typeof chainCapabilities !== 'object') return false
   const chainRecord = chainCapabilities as Record<string, unknown>
   const atomic = chainRecord.atomicBatch ?? chainRecord.atomic
@@ -181,9 +182,8 @@ function GearboxApp() {
   })
 
   const [amount, setAmount] = useState('')
-  const [monadOpportunity] = useState<LoadedGearboxOpportunity>()
-  const [mainnetOpportunity, setMainnetOpportunity] = useState<LoadedGearboxOpportunity>()
-  const [loadError] = useState<string>()
+  const [mainnetOpportunities, setMainnetOpportunities] = useState<LoadedGearboxOpportunity[]>([])
+  const [loadError, setLoadError] = useState<string>()
   const [executionError, setExecutionError] = useState<string>()
   const [isExecuting, setIsExecuting] = useState(false)
   const [steps, setSteps] = useState<ExecutionStep[]>([])
@@ -196,21 +196,20 @@ function GearboxApp() {
   const checkedOpenPositionKeys = useRef(new Set<string>())
   
   const selectedOpportunityIsExecutable = true
-  const opportunity = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID || selectedOpportunityId.startsWith('mainnet-') ? mainnetOpportunity : monadOpportunity
+  const opportunity = useMemo(() => {
+    if (!selectedOpportunityId.startsWith('mainnet-')) return undefined
+    const routeAddress = selectedOpportunityId.replace('mainnet-', '').toLowerCase()
+    return mainnetOpportunities.find(opp =>
+      opp.creditManagers.some(cm => cm.address.toLowerCase() === routeAddress),
+    )
+  }, [mainnetOpportunities, selectedOpportunityId])
 
   const opportunityViews = useMemo(() => {
     const views: OpportunityView[] = []
-    
-    function processOpportunity(
-      opp: LoadedGearboxOpportunity | undefined,
-      networkIdPrefix: string,
-      chainName: string,
-      defaultStrategyId: string
-    ) {
-      if (!opp) return false
 
-      const uniqueRoutes = new Map<string, typeof opp.creditManagers[0]>()
-      
+    function processOpportunity(opp: LoadedGearboxOpportunity) {
+      const uniqueRoutes = new Map<string, GearboxCreditManagerRoute>()
+
       for (const route of opp.creditManagers) {
         if (route.maxDebt <= 0n) continue
         if (route.apy !== undefined && route.apy < 0) continue
@@ -219,10 +218,10 @@ function GearboxApp() {
           uniqueRoutes.set(route.collateralToken, route)
           continue
         }
-        
+
         const apyCurrent = route.apy ?? 0
         const apyExisting = existing.apy ?? 0
-        
+
         let shouldReplace = false
         if (Math.abs(apyCurrent - apyExisting) > 0.001) {
           shouldReplace = apyCurrent > apyExisting
@@ -231,7 +230,7 @@ function GearboxApp() {
         } else {
           shouldReplace = route.maxDebt > existing.maxDebt
         }
-        
+
         if (shouldReplace) {
           uniqueRoutes.set(route.collateralToken, route)
         }
@@ -250,71 +249,73 @@ function GearboxApp() {
           displaySymbol = 'USDT0'
         }
         seenSymbols.add(displaySymbol)
+        const minDepositDisplayDecimals = Math.min(4, route.collateralDecimals)
 
         views.push({
-          id: `${networkIdPrefix}-${route.address}`,
-          strategyId: defaultStrategyId,
-          strategyName: opp.strategyName,
+          id: `mainnet-${route.address}`,
+          strategyId: opp.strategyId,
+          strategyName: route.strategyName,
           tokenSymbol: displaySymbol,
-          chainName,
+          // RWA strategies are headlined by the target they hold (mF-ONE,
+          // mGLOBAL); the deposit token (frxUSD) stays on amount-related text.
+          headlineSymbol: route.rwa ? route.targetSymbol : displaySymbol,
+          chainName: 'Ethereum',
           apyLabel: formatOpportunityApy(route.apy),
           leverageLabel: `${(Number(route.maxLeverage) / 100).toFixed(2)}x target`,
-          protectionLabel: opp.botAddress ? (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Deleverage bot included') : (chainName === 'Ethereum' ? 'Mainnet strategy' : 'Protection bot discovery pending'),
-          minDepositLabel: `Min deposit: ${formatTokenAmount(route.minimumDepositAmount, route.collateralDecimals)} ${displaySymbol}`,
+          protectionLabel: 'Mainnet strategy',
+          minDepositLabel: `Min deposit: ${formatMinimumDeposit(route.minimumDepositAmount, route.collateralDecimals, minDepositDisplayDecimals)} ${displaySymbol}`,
           isExecutable: true,
           apyPercent: route.apy !== undefined ? route.apy / 10_000 : undefined,
           baseApyPercent: route.baseApy !== undefined ? route.baseApy / 10_000 : undefined,
           borrowRatePercent: route.totalBorrowRate / 10_000,
           leverageMultiple: Number(route.maxLeverage) / 100,
           minimumDeposit: Number(route.minimumDepositAmount) / Math.pow(10, route.collateralDecimals),
+          minimumDepositRaw: route.minimumDepositAmount,
           collateralDecimals: route.collateralDecimals,
-          routeSteps: routeProvenanceForStrategy(defaultStrategyId, chainName),
+          routeSteps: routeProvenanceForStrategy(opp.strategyId, 'Ethereum', route.curator),
+          rwa: route.rwa,
+          kycRegistrationLink: route.kycRegistrationLink,
+          creditManager: route.address,
+          targetToken: opp.targetToken,
+          curator: route.curator,
+          liquidationThresholdBps: route.liquidationThresholdBps,
+          collateralApySource: route.collateralApySource,
+          // Back to SDK Bps (1% = 100) from the route's app units (1% = 10_000) —
+          // the back-test's fallback rate for a day the Gearbox chart doesn't cover.
+          currentBorrowApyBps: route.baseBorrowRate / 100,
+          currentQuotaRateBps: Number(route.baseQuotaRateWithFee) / 100,
         })
       })
-      return true
     }
 
-    // if (!processOpportunity(monadOpportunity, 'monad', 'Monad', STRATEGY_ID)) {
-    //   views.push(baseOpportunityView(undefined, undefined))
-    // }
-
-    if (!processOpportunity(mainnetOpportunity, 'mainnet', 'Ethereum', MAINNET_STRATEGY_ID)) {
+    if (mainnetOpportunities.length === 0) {
       views.push(MAINNET_WSTETH_STUB)
       views.push(MAINNET_WETH_OPPORTUNITY)
+    } else {
+      mainnetOpportunities.forEach(processOpportunity)
     }
-    
+
     return views
-  }, [mainnetOpportunity])
+  }, [mainnetOpportunities])
 
   useEffect(() => {
-    // if (monadOpportunity && selectedOpportunityId === MONAD_USDC_OPPORTUNITY_ID) {
-    //   const firstMonad = opportunityViews.find(v => v.id.startsWith('monad-'))
-    //   if (firstMonad) setSelectedOpportunityId(firstMonad.id)
-    // } else
-    if (mainnetOpportunity && selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID) {
+    if (mainnetOpportunities.length > 0 && selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID) {
       const firstMainnet = opportunityViews.find(v => v.id.startsWith('mainnet-'))
       if (firstMainnet) {
         setSelectedOpportunityId(firstMainnet.id)
       }
     }
-  }, [monadOpportunity, mainnetOpportunity, opportunityViews, selectedOpportunityId])
+  }, [mainnetOpportunities, opportunityViews, selectedOpportunityId])
 
   const displayedOpportunity = useMemo(() => {
     return opportunityViews.find(v => v.id === selectedOpportunityId) || opportunityViews[0]
   }, [opportunityViews, selectedOpportunityId])
 
   const selectedRoute = useMemo(() => {
-    if (!opportunity || !selectedOpportunityId) return undefined
-    if (selectedOpportunityId.startsWith('monad-')) {
-      const routeAddress = selectedOpportunityId.replace('monad-', '')
-      return monadOpportunity?.creditManagers.find(cm => cm.address === routeAddress)
-    }
-    if (selectedOpportunityId.startsWith('mainnet-')) {
-      const routeAddress = selectedOpportunityId.replace('mainnet-', '')
-      return mainnetOpportunity?.creditManagers.find(cm => cm.address === routeAddress)
-    }
-    return undefined
-  }, [monadOpportunity, mainnetOpportunity, opportunity, selectedOpportunityId])
+    if (!opportunity || !selectedOpportunityId.startsWith('mainnet-')) return undefined
+    const routeAddress = selectedOpportunityId.replace('mainnet-', '').toLowerCase()
+    return opportunity.creditManagers.find(cm => cm.address.toLowerCase() === routeAddress)
+  }, [opportunity, selectedOpportunityId])
 
   const amountRaw = useMemo(
     () => parseTokenAmount(amount, selectedRoute?.collateralDecimals || opportunity?.collateralDecimals || 6),
@@ -326,7 +327,8 @@ function GearboxApp() {
     if (!opportunity || !amountRaw || !selectedRoute) return undefined
 
     if (amountRaw < selectedRoute.minimumDepositAmount) {
-      return `Enter at least ${formatTokenAmount(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.04 HF and the strategy minimum debt.`
+      const displayDecimals = Math.min(4, selectedRoute.collateralDecimals)
+      return `Enter at least ${formatMinimumDeposit(selectedRoute.minimumDepositAmount, selectedRoute.collateralDecimals, displayDecimals)} ${selectedRoute.collateralSymbol} to keep this strategy above 1.04 HF and the strategy minimum debt.`
     }
     const debt = (amountRaw * (selectedRoute.maxLeverage - 100n)) / 100n
     if (debt < selectedRoute.minDebt || debt > selectedRoute.maxDebt || debt > selectedRoute.availableToBorrow) {
@@ -342,37 +344,22 @@ function GearboxApp() {
 
   // Reset amount to minimum deposit whenever the selected opportunity changes
   useEffect(() => {
-    if (!displayedOpportunity?.minimumDeposit) return
+    if (!displayedOpportunity?.minimumDepositRaw) return
     const decimals = Math.min(4, displayedOpportunity.collateralDecimals ?? 4)
-    setAmount(displayedOpportunity.minimumDeposit.toFixed(decimals))
+    setAmount(formatMinimumDeposit(displayedOpportunity.minimumDepositRaw, displayedOpportunity.collateralDecimals ?? 18, decimals))
   }, [displayedOpportunity?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false
 
-    // loadGearboxOpportunity()
-    //   .then(nextOpportunity => {
-    //     if (cancelled) return
-    //     setMonadOpportunity(nextOpportunity)
-    //     setLoadError(undefined)
-    //   })
-    //   .catch((error: unknown) => {
-    //     if (cancelled) return
-    //     setLoadError(error instanceof Error ? error.message : 'Failed to load Monad opportunity.')
-    //   })
-
-    loadGearboxOpportunity({
-      chainId: MAINNET_CHAIN_ID,
-      chainName: 'Mainnet',
-      rpcUrl: MAINNET_RPC_URL,
-      strategyId: MAINNET_STRATEGY_ID,
-    })
-      .then(nextOpportunity => {
+    loadMainnetOpportunities()
+      .then(opportunities => {
         if (cancelled) return
-        setMainnetOpportunity(nextOpportunity)
+        setMainnetOpportunities(opportunities)
       })
       .catch((error: unknown) => {
-        console.warn('Failed to load Mainnet opportunity:', error)
+        console.warn('Failed to load Mainnet opportunities:', error)
+        if (!cancelled) setLoadError("Couldn't load strategies from Ethereum. Reload the page to try again.")
       })
 
     return () => {
@@ -404,6 +391,42 @@ function GearboxApp() {
       cancelled = true
     }
   }, [address, opportunity, selectedRoute])
+
+  const [rwaEligibility, setRwaEligibility] = useState<RwaEligibilityStatus>('unknown')
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!address || !opportunity || !selectedRoute?.rwa) {
+      setRwaEligibility('unknown')
+      return
+    }
+
+    setRwaEligibility('checking')
+    checkStrategyEligibility(opportunity.sdk, selectedRoute.address, address)
+      .then(eligible => {
+        if (cancelled) return
+        setRwaEligibility(eligible ? 'eligible' : 'ineligible')
+      })
+      .catch(() => {
+        if (!cancelled) setRwaEligibility('error')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [address, opportunity, selectedRoute])
+
+  const rwaGate = useMemo<RwaExecutionGateView>(
+    () =>
+      rwaExecutionGate({
+        rwa: Boolean(selectedRoute?.rwa),
+        walletConnected: isConnected,
+        eligibility: rwaEligibility,
+        kycRegistrationLink: selectedRoute?.kycRegistrationLink,
+      }),
+    [isConnected, rwaEligibility, selectedRoute],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -535,9 +558,7 @@ function GearboxApp() {
     })
     setSteps(nextSteps)
 
-    const targetChainId = selectedOpportunityId === MAINNET_WETH_OPPORTUNITY_ID || selectedOpportunityId.startsWith('mainnet-')
-      ? MAINNET_CHAIN_ID
-      : MONAD_CHAIN_ID
+    const targetChainId = MAINNET_CHAIN_ID
 
     try {
       if (!publicClient) throw new Error('Wallet public client is not ready.')
@@ -638,7 +659,6 @@ function GearboxApp() {
     publicClient,
     runSequentialApproval,
     routeWarning,
-    selectedOpportunityId,
     selectedOpportunityIsExecutable,
     selectedRoute,
     sendCallsAsync,
@@ -663,7 +683,7 @@ function GearboxApp() {
 
   const manageUrl = hasStartedFlow && hasOpenPosition && !forceNewAccount && selectedOpportunityIsExecutable
     ? activeCreditAccount?.creditAccount
-      ? `https://app.gearbox.finance/accounts/${MONAD_CHAIN_ID}/${activeCreditAccount.creditAccount}/dashboard`
+      ? `https://app.gearbox.finance/accounts/${MAINNET_CHAIN_ID}/${activeCreditAccount.creditAccount}/dashboard`
       : GEARBOX_DASHBOARD_URL
     : undefined
 
@@ -687,6 +707,7 @@ function GearboxApp() {
         setHasStartedFlow(true)
       }}
       routeWarning={displayedRouteWarning}
+      rwaGate={displayedOpportunity.rwa ? rwaGate : undefined}
       steps={selectedOpportunityIsExecutable ? steps : []}
       onAmountChange={setAmount}
       onConnect={() => {
@@ -714,10 +735,10 @@ function GearboxApp() {
 }
 
 export function App() {
-  // Fixture-driven advisor demo — no wallet or chain required.
-  if (new URLSearchParams(window.location.search).get('view') === 'advisor') {
-    return <AdvisorApp />
-  }
+  // Institutional Credit / advisor entry point is disabled for now.
+  // if (new URLSearchParams(window.location.search).get('view') === 'advisor') {
+  //   return <AdvisorApp />
+  // }
 
   return (
     <WagmiProvider config={config}>

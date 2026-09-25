@@ -1,0 +1,175 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { OnchainSDK } from '@gearbox-protocol/sdk/onchain'
+import type { Address } from 'viem'
+import type { GearboxCreditManagerRoute, LoadedGearboxOpportunity } from './lib/gearbox/live'
+
+const wethRoute: GearboxCreditManagerRoute = {
+  address: '0x1111111111111111111111111111111111111111' as Address,
+  apy: 513_900,
+  baseApy: 42_000,
+  maxLeverage: 760n,
+  minimumDepositAmount: 1_500_000_000_000_000_000n,
+  minDebt: 1_000_000_000_000_000_000n,
+  maxDebt: 1_000_000_000_000_000_000_000n,
+  availableToBorrow: 1_000_000_000_000_000_000_000n,
+  baseBorrowRate: 20_000,
+  baseQuotaRateWithFee: 5_000n,
+  totalBorrowRate: 25_000,
+  collateralToken: '0x2222222222222222222222222222222222222222' as Address,
+  collateralSymbol: 'WETH',
+  collateralDecimals: 18,
+  rwa: false,
+  strategyName: 'ETH+ / WETH',
+  targetSymbol: 'wmooCurveETH+-WETH',
+  curator: 'KPK',
+  liquidationThresholdBps: 9000,
+  collateralApySource: 'backend',
+}
+
+const mfOneRoute: GearboxCreditManagerRoute = {
+  address: '0x3333333333333333333333333333333333333333' as Address,
+  apy: undefined,
+  baseApy: undefined,
+  maxLeverage: 500n,
+  minimumDepositAmount: 37_500_000_000_000_000_000_000n,
+  minDebt: 10_000_000_000_000_000_000_000n,
+  maxDebt: 500_000_000_000_000_000_000_000n,
+  availableToBorrow: 500_000_000_000_000_000_000_000n,
+  baseBorrowRate: 30_000,
+  baseQuotaRateWithFee: 3_000n,
+  totalBorrowRate: 33_000,
+  collateralToken: '0x4444444444444444444444444444444444444444' as Address,
+  collateralSymbol: 'frxUSD',
+  collateralDecimals: 18,
+  rwa: true,
+  kycRegistrationLink: undefined,
+  strategyName: 'mF-ONE',
+  targetSymbol: 'mF-ONE',
+  curator: 'KPK',
+  liquidationThresholdBps: 8500,
+  collateralApySource: 'nav',
+}
+
+const mGlobalRoute: GearboxCreditManagerRoute = {
+  ...mfOneRoute,
+  address: '0x5555555555555555555555555555555555555555' as Address,
+  minimumDepositAmount: 40_540_000_000_000_000_000_000n,
+  maxLeverage: 470n,
+  kycRegistrationLink: 'https://form.typeform.com/to/DqZaw6kr',
+  strategyName: 'mGLOBAL',
+  targetSymbol: 'mGLOBAL',
+}
+
+function loadedOpportunity(
+  strategyId: string,
+  strategyName: string,
+  rwa: boolean,
+  routes: GearboxCreditManagerRoute[],
+): LoadedGearboxOpportunity {
+  return {
+    sdk: {} as unknown as OnchainSDK,
+    strategyId,
+    strategyName,
+    targetToken: routes[0].collateralToken,
+    creditManager: routes[0].address,
+    collateralToken: routes[0].collateralToken,
+    collateralSymbol: routes[0].collateralSymbol,
+    collateralDecimals: routes[0].collateralDecimals,
+    chainName: 'Mainnet',
+    maxApy: routes[0].apy,
+    apyLabel: 'APY loading',
+    maxLeverage: routes[0].maxLeverage,
+    minimumDepositAmount: routes[0].minimumDepositAmount,
+    leverageLabel: `${(Number(routes[0].maxLeverage) / 100).toFixed(2)}x target`,
+    rwa,
+    creditManagers: routes,
+  }
+}
+
+const fixtureOpportunities: LoadedGearboxOpportunity[] = [
+  loadedOpportunity('wmooCurveETH+-WETH', 'Convex ETH+/WETH (Optimized by Beefy)', false, [wethRoute]),
+  loadedOpportunity('mF-ONE', 'mF-ONE', true, [mfOneRoute]),
+  loadedOpportunity('mGLOBAL', 'mGLOBAL', true, [mGlobalRoute]),
+]
+
+// The cockpit's chart lazily fetches a strategy back-test over the network
+// (Gearbox backend or on-chain NAV); these fixtures don't attach a real SDK
+// or backend, so stub it out rather than let jsdom hang on a real fetch.
+vi.mock('./lib/gearbox/strategyBacktest', () => ({
+  fetchStrategyBacktest: vi.fn().mockResolvedValue(undefined),
+  fetchNavBacktest: vi.fn().mockResolvedValue(undefined),
+}))
+
+// Same story for the DefiLlama benchmark fetch — real network, no bearing on
+// what these tests assert, and slow/flaky under full-suite load.
+vi.mock('./lib/defillamaYields', async () => {
+  const actual = await vi.importActual<typeof import('./lib/defillamaYields')>('./lib/defillamaYields')
+  return {
+    ...actual,
+    loadEthereumYieldBenchmarks: vi.fn().mockResolvedValue([]),
+  }
+})
+
+vi.mock('./lib/gearbox/live', async () => {
+  const actual = await vi.importActual<typeof import('./lib/gearbox/live')>('./lib/gearbox/live')
+  return {
+    ...actual,
+    loadMainnetOpportunities: vi.fn().mockResolvedValue(fixtureOpportunities),
+  }
+})
+
+afterEach(() => {
+  window.history.pushState({}, '', '/')
+})
+
+describe('App — routing', () => {
+  it('renders the cockpit instead of the advisor experience for ?view=advisor', async () => {
+    window.history.pushState({}, '', '/?view=advisor')
+    const { App } = await import('./App')
+    render(<App />)
+
+    expect(await screen.findByRole('tablist', { name: /strategy/i })).toBeInTheDocument()
+  })
+})
+
+describe('App — loading failures', () => {
+  it('tells the user when mainnet strategies cannot be loaded', async () => {
+    const live = await import('./lib/gearbox/live')
+    vi.mocked(live.loadMainnetOpportunities).mockRejectedValueOnce(new Error('getMarkets reverted'))
+    const { App } = await import('./App')
+    render(<App />)
+
+    expect(await screen.findByText(/couldn't load strategies from ethereum/i)).toBeInTheDocument()
+  })
+})
+
+describe('App — RWA opportunities', () => {
+  it('lists RWA opportunities without filtering them out via the negative-APY rule, labelled by target symbol', async () => {
+    const { App } = await import('./App')
+    render(<App />)
+
+    expect(await screen.findByRole('tab', { name: /mf-one/i })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: /mglobal/i })).toBeInTheDocument()
+  })
+
+  it('fetches the RWA back-test from the on-chain NAV source, and the ETH+ back-test from the Gearbox backend', async () => {
+    const backtest = await import('./lib/gearbox/strategyBacktest')
+    const { App } = await import('./App')
+    render(<App />)
+
+    const wethTab = await screen.findByRole('tab', { name: /weth/i })
+    fireEvent.click(wethTab)
+    expect(vi.mocked(backtest.fetchStrategyBacktest)).toHaveBeenCalledWith(wethRoute.address, wethRoute.liquidationThresholdBps, expect.any(Number))
+
+    const mfOneTab = await screen.findByRole('tab', { name: /mf-one/i })
+    fireEvent.click(mfOneTab)
+    expect(vi.mocked(backtest.fetchNavBacktest)).toHaveBeenCalledWith(
+      mfOneRoute.address,
+      mfOneRoute.collateralToken,
+      mfOneRoute.liquidationThresholdBps,
+      expect.any(Number),
+      { borrowApyBps: mfOneRoute.baseBorrowRate / 100, quotaRateBps: Number(mfOneRoute.baseQuotaRateWithFee) / 100 },
+    )
+  })
+})

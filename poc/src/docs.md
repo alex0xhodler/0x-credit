@@ -11,9 +11,9 @@ Path: @/poc/src
 ### How it fits into the larger codebase
 
 - `App.tsx` is the application root mounted by `@/poc/src/main.tsx`. It composes Wagmi, React Query, and Reown AppKit providers around `GearboxApp`.
-- `GearboxApp` calls `loadGearboxOpportunity` from `@/poc/src/lib/gearbox/live.ts` to fetch on-chain strategy data for both Monad and Ethereum Mainnet chains.
-- `opportunityViews` (the list passed to `TransactionCockpit`) is derived inside `App.tsx` by iterating `LoadedGearboxOpportunity.creditManagers` and mapping each `GearboxCreditManagerRoute` to an `OpportunityView` with numeric fields (`apyPercent`, `baseApyPercent`, `borrowRatePercent`, `leverageMultiple`, `minimumDeposit`). Each view may also carry structured, selected-route-specific `routeSteps` provenance.
-- `TransactionCockpit.tsx` loads the pinned Ethereum yield benchmarks through `@/poc/src/lib/defillamaYields.ts` and passes them, together with the selected route’s net APY, to `buildBalanceTimeline` in `@/poc/src/lib/comparisonTimeline.ts`.
+- `GearboxApp` calls `loadMainnetOpportunities` from `@/poc/src/lib/gearbox/live.ts` to fetch on-chain strategy data for Ethereum Mainnet (the only configured network): the ETH+/WETH strategy and the allowlisted RWA strategies (mF-ONE, mGLOBAL).
+- `opportunityViews` (the list passed to `TransactionCockpit`) is derived inside `App.tsx` by iterating `LoadedGearboxOpportunity.creditManagers` and mapping each `GearboxCreditManagerRoute` to an `OpportunityView` with numeric fields (`apyPercent`, `baseApyPercent`, `borrowRatePercent`, `leverageMultiple`, `minimumDeposit`, plus the raw `minimumDepositRaw` bigint for ceiling-rounded display) and per-route identity (`strategyName`, `headlineSymbol`, `curator`, `creditManager`, `liquidationThresholdBps`). Each view may also carry structured, selected-route-specific `routeSteps` provenance.
+- `TransactionCockpit.tsx` fetches the selected route's own leveraged back-test through `@/poc/src/lib/gearbox/strategyBacktest.ts` and the (ETH-only) Lido benchmark through `@/poc/src/lib/defillamaYields.ts`, and passes both, together with the selected route's net APY, to `buildBalanceTimeline` in `@/poc/src/lib/comparisonTimeline.ts`.
 - Execution logic (approve + open credit account) lives entirely in `App.tsx`; `TransactionCockpit` surfaces progress via the `steps: ExecutionStep[]` prop, sourced from `@/poc/src/lib/gearbox/plan.ts`.
 - CSS design tokens and all layout rules live in `App.css`; the cockpit layout classes (`.cockpit-wrap`, `.cockpit-body`, `.cockpit-chart-pane`, `.cockpit-builder`) are defined there.
 
@@ -21,9 +21,10 @@ Path: @/poc/src
 
 **App.tsx — state and orchestration**
 
-- Maintains two parallel opportunity loads (`monadOpportunity`, `mainnetOpportunity`) with a shared `selectedOpportunityId` that tracks which tab is active.
-- `opportunityViews` memo deduplicates credit managers per collateral token (preferring higher APY, then lower `minDebt`, then higher `maxDebt`), filters negative APYs, and sorts by `maxDebt` descending.
-- A `useEffect` keyed on `displayedOpportunity.id` sets `amount` to `2 × minimumDeposit` whenever the selected opportunity changes away from a stale default (`'1500'`, `'3'`, `'1.5'`, `''`).
+- Holds the list of loaded mainnet opportunities and a `selectedOpportunityId` (`mainnet-<creditManager>`); the active opportunity is the one whose routes contain that credit manager.
+- `opportunityViews` memo deduplicates credit managers per collateral token within each opportunity (preferring higher APY, then lower `minDebt`, then higher `maxDebt`), drops routes with a negative APY but keeps routes whose APY is unknown (RWAs), and sorts by `maxDebt` descending.
+- For RWA routes with a connected wallet, an effect checks strategy eligibility (ignoring stale results) and passes `rwaExecutionGate`'s result to the cockpit as `rwaGate`.
+- A `useEffect` keyed on `displayedOpportunity.id` sets `amount` to the route's minimum deposit (via `formatMinimumDeposit`, rounded UP from the raw bigint — never the nearest/floor display value) whenever the selected opportunity changes.
 - `routeWarning` validates the entered `amountRaw` against `minimumDepositAmount` and the selected route's debt bounds before execution is permitted.
 - `handleExecute` supports two paths: atomic batch (EIP-5792 `sendCalls`) when the wallet advertises `atomicBatch` capability, or sequential approve-then-open otherwise.
 - Position state (`hasOpenPosition`, `activeCreditAccount`) is persisted to `localStorage` keyed by `address + strategyId` and reconciled against on-chain `getBorrowerCreditAccounts` on connect.
@@ -52,9 +53,9 @@ cockpit-wrap
 │           └── primary-action button
 ```
 
-- `YieldComparisonChart` renders one continuous ETH-equivalent balance timeline: historical APY compounds up to `Now`, and the same series then project forward from their current rates. It compares the selected route’s net APY, Lido stETH, and holding WETH at 0%.
-- The comparison period control is a `role="radiogroup"` with 1M, 6M, and 1Y choices; the default is 6M. The chart baseline follows the entered deposit (or the minimum deposit fallback) after a 300 ms debounce, preventing a redraw for every keystroke.
-- Benchmark fetching is best-effort and abortable. When it is unavailable, the chart still renders the selected route and the flat WETH comparison; unavailable benchmark series are omitted.
+- `YieldComparisonChart` renders one continuous balance timeline: the strategy's own leveraged back-test compounds up to `Now` (or, absent one, no past segment at all — never a flat/misleading line), then the same series project forward from their current rates with no gap at `Now`. It compares the selected route's net APY against a flat "hold {deposit token}" baseline, plus Lido stETH when the deposit is ETH-like (WETH/wstETH) — a stable/RWA deposit (frxUSD) omits the ETH benchmark entirely rather than comparing it to ETH staking yield.
+- The comparison period control is a `role="radiogroup"` with 1M, 6M, and 1Y choices; the default is 6M. The chart baseline follows the entered deposit (or the minimum deposit fallback) after a 300 ms debounce, preventing a redraw for every keystroke. The Y axis uses a compact tick formatter (e.g. `37.5K`) since balances range from single digits (ETH deposits) to tens of thousands (RWA deposits).
+- Benchmark and back-test fetching are both best-effort. When either is unavailable, the chart still renders the selected route (projection-only if no back-test) and the flat hold baseline; unavailable series are omitted.
 - Strategy selector is a persistent `role="tablist"` tab bar in the header. Switching tabs calls `onSelectOpportunity`, which in `App.tsx` resets execution error, sets `forceNewAccount`, and updates `amount` to a chain-appropriate default.
 - When present, `OpportunityView.routeSteps` is rendered as a compact route summary beside the projection rather than as global partner branding; every displayed provider is paired with its operational role.
 
@@ -66,6 +67,8 @@ cockpit-wrap
 - `isCollapsedApproval` collapses the approve step visually once it is done, to reduce noise during the account-open step.
 - `useSimulatedPositionValue` uses a 2-second polling interval and respects `prefers-reduced-motion` — the ticker freezes when reduced motion is set.
 - `manageUrl` is only set when `hasStartedFlow && hasOpenPosition && !forceNewAccount`. `forceNewAccount` is set to `true` when the user switches strategy tabs or explicitly resets the flow, which brings the cockpit back into deposit mode even when a position exists.
+- RWA opportunities render "APY n/a" (loaded, no APY) rather than the loading skeleton, show borrow cost and leverage, replace the projection chart and zero-yield previews with a note, and show an exit disclosure linking to the Gearbox dashboard. When `rwaGate.canExecute` is false the approve/open action is disabled and the reason (plus the Midas registration link, if any) is shown.
+- The "Institutional Credit" header link and the `?view=advisor` route are commented out for now; the advisor module is still in the tree but unreachable, and `?view=advisor` renders the cockpit.
 - `shell.is-landing` and `shell.is-expanded` CSS states are legacy remnants from the previous 2-step flow. They remain in `App.css` but are no longer set by `TransactionCockpit.tsx`.
 
 Created and maintained by Nori.

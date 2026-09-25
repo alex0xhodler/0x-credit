@@ -10,10 +10,10 @@ interface TrustlineAuditBadgeProps {
 }
 
 export function TrustlineAuditBadge({ audit, sid, tid, proposalKind, onOverrideMandate }: TrustlineAuditBadgeProps) {
-  if (!audit && !sid) return null
-
   const [overrideActive, setOverrideActive] = useState(false)
   const [showTraceProof, setShowTraceProof] = useState(false)
+
+  if (!audit && !sid) return null
 
   const isApproved = audit?.decision === 'APPROVE' || overrideActive
   const decisionText = overrideActive ? 'APPROVE' : (audit?.decision || 'PENDING')
